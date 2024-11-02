@@ -1,0 +1,6 @@
+App\Jobs\TelegramInspire::dispatch('782919745', '🎧 You have a new order!');
+App\Jobs\TelegramInspire::dispatch('782919745', '🎧 You have a new order!');
+App\Jobs\TelegramInspire::dispatch('782919745', '🎧 You have a new order!');
+App\Jobs\TelegramInspire::dispatch('782919745', '🎧 You have a new order!');
+App\Jobs\TelegramInspire::dispatch('782919745', '🎧 You have a new order!');
+exit

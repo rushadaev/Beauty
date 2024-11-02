@@ -1,0 +1,2 @@
+* * * * * cd /var/www/wb-back && php artisan schedule:run --no-ansi >> /var/www/wb-back/storage/logs/cron.log 2>&1
+* * * * * echo 'Cron is working at ' >> /var/www/wb-back/storage/logs/cron_test.log 2>&1

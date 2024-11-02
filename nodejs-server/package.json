@@ -1,0 +1,52 @@
+{
+  "name": "nodejs-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "webpack --watch & nodemon dist/main.js --watch dist",
+    "build": "webpack",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@telegraf/session": "^2.0.0-beta.7",
+    "axios": "^1.7.7",
+    "body-parser": "^1.20.3",
+    "bufferutil": "^4.0.8",
+    "bull": "^4.16.3",
+    "electron": "^32.1.2",
+    "express": "^4.21.0",
+    "form-data": "^4.0.0",
+    "php-serialize": "^5.0.1",
+    "playwright": "^1.47.2",
+    "playwright-cluster": "^1.0.7",
+    "playwright-extra": "^4.3.6",
+    "playwright-extra-plugin-stealth": "^0.0.1",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "redis": "^4.7.0",
+    "telegraf": "^4.16.3",
+    "utf-8-validate": "^6.0.4",
+    "uuid": "^10.0.0",
+    "winston": "^3.14.2"
+  },
+  "devDependencies": {
+    "@telegraf/types": "^7.1.0",
+    "@types/body-parser": "^1.19.5",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.7.4",
+    "concurrently": "^9.0.1",
+    "copy-webpack-plugin": "^12.0.2",
+    "nodemon": "^3.1.7",
+    "null-loader": "^4.0.1",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-node-externals": "^3.0.0"
+  }
+}
