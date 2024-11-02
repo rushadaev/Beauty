@@ -1,10 +1,10 @@
 services:
-  wb-app:
+  beauty:
     build:
       context: .
       dockerfile: Dockerfile
-    image: wb-app
-    container_name: wb-app
+    image: beauty
+    container_name: beauty
     restart: unless-stopped
     tty: true
     volumes:
@@ -15,7 +15,7 @@ services:
 
   webserver:
     image: nginx:alpine
-    container_name: nginx-wb-app
+    container_name: nginx-beauty
     restart: unless-stopped
     tty: true
     ports:
@@ -31,7 +31,7 @@ services:
 
   db:
     image: postgres:16
-    container_name: postgres-wb-app
+    container_name: postgres-beauty
     restart: unless-stopped
     tty: true
     ports:
@@ -47,7 +47,7 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: redis-wb-app
+    container_name: redis-beauty
     restart: unless-stopped
     tty: true
     ports:
@@ -66,7 +66,7 @@ services:
     volumes:
       - ./wb-back:/var/www/wb-back
     depends_on:
-      - wb-app
+      - beauty
       - db
       - redis
     networks:
@@ -89,7 +89,7 @@ services:
       - ./wb-back:/var/www/wb-back
       - ./wb-back/storage/state:/var/www/wb-back/storage/state
     depends_on:
-      - wb-app
+      - beauty
       - db
       - redis
     networks:
