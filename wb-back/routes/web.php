@@ -6,7 +6,7 @@ use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\TelegramControllerSupplies;
 
 Route::get('/', function () {
-    return "Hey there!";
+    return "Beauty API v.1";
 });
 
 Route::middleware(['telegram.auth'])->group(function () {

@@ -24,6 +24,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'company_id',
         'email',
         'password',
         'telegram_id',
@@ -96,6 +97,12 @@ class User extends Authenticatable
         return $apiKey ? $apiKey->api_key : null;
     }
 
+    public function getYclientsApiKey()
+    {
+        $apiKey = $this->apiKeys()->where('service', 'yclients')->first();
+        return $apiKey ? $apiKey->api_key : null;
+    }
+
     /**
      * Check if the user has an active subscription.
      *
@@ -117,5 +124,11 @@ class User extends Authenticatable
     public function notifications()
     {
         return $this->hasMany(Notification::class);
+    }
+
+
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
     }
 }

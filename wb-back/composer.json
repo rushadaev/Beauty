@@ -7,6 +7,12 @@
         "framework"
     ],
     "license": "MIT",
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/vgrish/yclients-openapi-php/"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "backpack/crud": "^6.7",
@@ -18,7 +24,8 @@
         "openai-php/laravel": "^0.10.1",
         "predis/predis": "^2.2",
         "telegram-bot/api": "dev-master",
-        "yoomoney/yookassa-sdk-php": "^3.5"
+        "yoomoney/yookassa-sdk-php": "^3.5",
+        "vgrish/yclients-openapi-php": "dev-main"
     },
     "require-dev": {
         "backpack/generators": "^4.0",

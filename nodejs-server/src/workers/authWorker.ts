@@ -12,8 +12,7 @@ import axios, { AxiosResponse } from 'axios';
 import { waitForVerificationCode } from '../utils/redis/redisHelper';
 import {TaskInput} from "../utils/pow/solveTask";
 import {getPowTask, solvePowTask, verifyPowAnswer} from "../controllers/acceptanceController";
-import {sendMessageToTelegram} from "../utils/telegram";
-import {createUserCabinetAndNotify, sendMessageToClient} from "../telegraf/controllers/telegramController"; // Implement notification to Laravel
+import { sendMessageToClient} from "../telegraf/controllers/telegramController"; // Implement notification to Laravel
 
 interface PowAnswer {
     // Define based on actual answer structure
@@ -255,24 +254,11 @@ const handleCaptcha = async (page: Page, telegramId: string): Promise<boolean> =
  */
 const notifyAuthResult = async (telegramId: string, status: string, payload: object): Promise<void> => {
     try {
-        if(status == 'success') {
-            await createUserCabinetAndNotify(telegramId, status, payload);
-        }
-        else {
-            await sendMessageToClient(telegramId, `Статус аутентификации: ${status}\n Пожалуйста, попробуйте еще раз`);
-        }
+        await sendMessageToClient(telegramId, `Статус аутентификации: ${status}\n Пожалуйста, попробуйте еще раз`);
     } catch (error: any) {
         console.error('Failed to notify Laravel:', error.message);
     }
 };
-
-const successfulleAuthNotify = async (telegramId: string, status: string, payload: string): Promise<void> => {
-    try {
-        await createUserCabinetAndNotify(telegramId, status, payload);
-    } catch (error: any) {
-        console.error('Failed to notify', error.message);
-    }
-}
 
 // Process jobs from the 'authentication' queue
 authQueue.process(async (job) => {

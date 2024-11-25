@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationController extends Controller
 {
@@ -21,28 +22,28 @@ class NotificationController extends Controller
         $request->validate([
             'page' => 'integer|min:1',
             'per_page' => 'integer|min:1|max:100',
-            'type' => 'string|in:search,booking',
+            'type' => 'string',
+            'id' => 'nullable',
         ]);
 
         // Retrieve query parameters for pagination
         $page = $request->input('page', 1); // Default to page 1
         $perPage = $request->input('per_page', 10); // Default to 10 notifications per page
 
-
         // Fetch paginated notifications
         $query = Notification::whereHas('user', function ($query) use ($telegramId) {
             $query->where('telegram_id', $telegramId);
-        })->orderBy('created_at', 'desc') // Order by most recent
-            ->when($request->input('type'), function ($query, $type) {
-                if($type === 'search') {
-                    return $query->whereNull('settings->isBooking')
-                                     ->orWhere('settings->isBooking', false);
-                } elseif ($type === 'booking') {
-                    return $query->where('settings->isBooking', true);
-                } else {
-                    return $query;
-                }
-            });
+        })->orderBy('created_at', 'desc');
+
+        // Filter by type if provided
+        if ($request->has('type')) {
+            $query->where('settings->type', $request->input('type'));
+        }
+
+        // Filter by id if provided
+        if ($request->has('id')) {
+            $query->where('id', $request->input('id'));
+        }
 
         $notifications = $query->paginate($perPage, ['*'], 'page', $page);
         // Check if user exists by verifying if any notifications are found
@@ -66,18 +67,15 @@ class NotificationController extends Controller
             return response()->json(['error' => 'User not found'], 404);
         }
 
+        //Уведомление если тип многоразовое - создаем уведмоелния на каждый месяц в течение года
+
+
         $notificationCount = 1;
-        $manyDates = [];
-        if($settings['dates']){
-            $notificationCount = count($settings['dates']);
-        }
 
         for ($i = 0; $i < $notificationCount; $i++) {
             $notification = new Notification();
             $notification->user_id = $user->id;
-            if(count($settings['dates']) > 0){
-                $settings['checkUntilDate'] = $settings['dates'][$i];
-            }
+
             $notification->settings = $settings;
             $notification->status = 'started';
             $notification->save();
@@ -89,6 +87,7 @@ class NotificationController extends Controller
 
     public function deleteNotification($notificationId)
     {
+        Cache::delete('notification_' . $notificationId);
         $notification = Notification::find($notificationId);
         if (!$notification) {
             return response()->json(['error' => 'Notification not found'], 404);
@@ -97,5 +96,25 @@ class NotificationController extends Controller
         $notification->delete();
 
         return response()->json(['message' => 'Notification deleted']);
+    }
+
+    //updateNotification
+    public function updateNotification($notificationId, Request $request)
+    {
+        $notification = Notification::find($notificationId);
+        if (!$notification) {
+            return response()->json(['error' => 'Notification not found'], 404);
+        }
+
+        $data = request()->validate([
+            'settings' => 'required',
+        ]);
+
+        $settings = request('settings');
+
+        $notification->settings = $settings;
+        $notification->save();
+
+        return response()->json(['message' => 'Notification updated', 'notification' => $notification]);
     }
 }

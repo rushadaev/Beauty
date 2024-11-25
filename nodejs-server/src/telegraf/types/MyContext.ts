@@ -31,11 +31,33 @@ export interface AutoBookingState {
 export interface ReauthState {
     cabinet: any;
 }
+
+export interface NotificationForm {
+    notification_id?: number;
+    product_id?: number;
+    product_name?: string;
+
+
+
+
+    id?: string;
+    name: string;
+    sum?: string;
+    dateTime: string;
+    type?: string;
+}
 /**
  * Base Wizard Session Interface
  */
 export interface MyWizardSession extends Scenes.WizardSessionData {
+    password: string;
+    phone: string;
+    user_id?: number;
+    task_id?: number;
+    notificationForm: NotificationForm;
     autobookingForm: AutoBookingForm;
+
+    registrationForm: RegistrationForm;
     cabinetForm: CabinetForm;
     myWizardSessionProp: number;
     cabinetName: string;
@@ -83,6 +105,10 @@ export type MySessionData = MyWizardSession;
  * Global Session Interface accommodating all Scene Sessions
  */
 export interface MySession extends Scenes.WizardSession<MySessionData> {
+    user: any;
+    notifications: any[];
+    notificationForm: NotificationForm;
+    notificationId: string;
     searchRequestsType: string;
     autobookingForm: AutoBookingForm;
     page: number;
@@ -94,6 +120,31 @@ export interface MySession extends Scenes.WizardSession<MySessionData> {
     searchRequestsPage: number;
 }
 
+
+
+export interface registrationForm {
+    fullName?: string;
+    birthDate?: string;
+    passport?: string;
+    issuedBy?: string;
+    issueDate?: string;
+    divisionCode?: string;
+    registrationAddress?: string;
+    inn?: string;
+    accountNumber?: string;
+    bankName?: string;
+    bik?: string;
+    corrAccount?: string;
+    bankInn?: string;
+    bankKpp?: string;
+    phone?: string;
+    email?: string;
+    hasMedBook?: boolean;
+    medBookExpiry?: string;
+    hasEducationCert?: boolean;
+    educationCertPhoto?: string;
+    isSelfEmployed?: boolean;
+}
 
 
 /**

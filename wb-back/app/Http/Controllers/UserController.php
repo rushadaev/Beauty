@@ -4,9 +4,19 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use App\Services\YclientsService;
+use Illuminate\Support\Facades\Redis;
+use Vgrish\YclientsOpenApi\Model\AuthUserRequest;
 
 class UserController extends Controller
 {
+
+    protected $yclientsService;
+
+    public function __construct(YclientsService $yclientsService)
+    {
+        $this->yclientsService = $yclientsService;
+    }
 
     public function getUserByTelegramId($telegramId)
     {
@@ -120,4 +130,59 @@ class UserController extends Controller
 
         return response()->json(['message' => 'Cabinet updated', 'user' => $user]);
     }
+
+    public function getStaff()
+    {
+        $staff = User::get();
+        return response()->json($staff);
+    }
+
+    /**
+     * @throws \Exception
+     */
+    public function auth(){
+        $data = request()->validate([
+            'phone' => 'required',
+            'password' => 'required',
+            'telegram_id' => 'required',
+        ]);
+
+        $phone = request('phone');
+        $password = request('password');
+        $telegramId = request('telegram_id');
+
+        $user = User::where('telegram_id', $telegramId)->first();
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+
+        auth()->login($user);
+
+        $user->update(['phone_number' => $phone]);
+
+
+        $key = $this->yclientsService->authenticateByCreds($telegramId, $password, $phone);
+
+        if (!$key) {
+            return response()->json(['error' => 'Invalid credentials'], 401);
+        }
+
+        $newApiKey = $user->apiKeys()->create([
+            'service' => 'yclients',
+            'api_key' => $key,
+        ]);
+
+        $company = $this->yclientsService->getMyCompany();
+
+        $user->update(['company_id' => $company['id']]);
+
+
+
+        // Invalidate the cached user data after the update
+        Cache::forget('user_telegram_id_' . $user->telegram_id);
+
+        return response()->json($key);
+    }
+
+
 }

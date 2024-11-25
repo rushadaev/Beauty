@@ -34,4 +34,9 @@ return [
         'base_url' => env('NODEJS_BASE_URL', 'http://nodejs-server:3000'),
     ],
 
+    'yclients' => [
+        'partner_token' => env('YCLIENTS_PARTNER_TOKEN'),
+        'login'         => env('YCLIENTS_LOGIN'),
+        'password'      => env('YCLIENTS_PASSWORD'),
+    ],
 ];

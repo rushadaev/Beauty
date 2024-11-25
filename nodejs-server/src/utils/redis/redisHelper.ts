@@ -23,7 +23,7 @@ export function waitForVerificationCode(
     return new Promise<string>(async (resolve, reject) => {
         // Construct the channel name with the given Telegram ID
         let channel = `verification_code_channel_${telegramId}`;
-        channel = `wb_app_database_${channel}`;
+        channel = `beauty_database_${channel}`;
 
         /**
          * Handler for incoming messages on the Redis channel.

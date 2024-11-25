@@ -8,7 +8,8 @@ import bot from './telegraf/controllers/telegramController';
 import draftsRoutes from './routes/drafts';
 import ordersRoutes from './routes/orders';
 import acceptanceRoutes from './routes/acceptance';
-import authRoutes from './routes/auth';
+import yclientsRoutes from "./routes/yclientsRoutes";
+import botMaster from "./telegraf/controllers/telegramBotMasterController";
 
 const app: Application = express();
 const PORT: number | string = process.env.PORT || 3000;
@@ -27,6 +28,7 @@ export const logger = winston.createLogger({
             format: winston.format.json(), // Optional: Can also use format like simple or custom formats
         }),
         // Add more transports like File if needed
+
     ],
 });
 
@@ -36,11 +38,14 @@ app.use(bodyParser.json());
 // Routes
 // Webhook route
 app.use(bot.webhookCallback('/webhook/telegram'));
+app.use(botMaster.webhookCallback('/webhook/telegram-master'));
+
 
 app.use('/api/drafts', draftsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/acceptance', acceptanceRoutes);
-app.use('/api/auth', authRoutes);
+
+app.use('/api/yclients', yclientsRoutes);
 
 // Health Check Endpoint
 app.get('/health', (req: Request, res: Response) => {

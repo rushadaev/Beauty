@@ -25,8 +25,8 @@ export async function setCacheValue(
     expirationInSeconds: number = 3600
 ): Promise<void> {
     try {
-        // Custom key format: wb_app_database_{key}
-        const formattedKey = `wb_app_database_${key}`;
+        // Custom key format: beauty_database_{key}
+        const formattedKey = `beauty_database_${key}`;
         const serializedValue = phpSerialize(value);
         const options: SetOptions = {
             EX: expirationInSeconds, // Expiration time in seconds
@@ -48,8 +48,8 @@ export async function setCacheValue(
  */
 export async function getCacheValue<T = any>(key: string): Promise<T | string | null> {
     try {
-        // Custom key format: wb_app_database_{key}
-        const formattedKey = `wb_app_database_${key}`;
+        // Custom key format: beauty_database_{key}
+        const formattedKey = `beauty_database_${key}`;
         const value = await redisClient.get(formattedKey);
         if (value !== null) {
             try {
@@ -78,8 +78,8 @@ export async function getCacheValue<T = any>(key: string): Promise<T | string | 
  */
 export async function clearCacheValue(key: string): Promise<boolean> {
     try {
-        // Custom key format: wb_app_database_{key}
-        const formattedKey = `wb_app_database_${key}`;
+        // Custom key format: beauty_database_{key}
+        const formattedKey = `beauty_database_${key}`;
         const result = await redisClient.del(formattedKey);
         if (result === 1) {
             console.log(`Successfully deleted key: ${formattedKey}`);

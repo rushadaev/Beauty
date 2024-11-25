@@ -7,15 +7,27 @@ import {SceneSession} from "telegraf/typings/scenes";
 export const cabinetGate = async (ctx: MyContext, scene: string) => {
     let user = null;
     try{
-        user = await LaravelService.getUserByTelegramId(ctx.from.id);
+        user = await LaravelService.getUserByTelegramId(ctx.from.id, 10);
     } catch (error) {
         logger.error('Error getting user:', error);
         await ctx.reply('Произошла ошибка при получении данных пользователя. Попробуйте позже');
     }
 
-    if(user && user.cabinets.length === 0) {
-        await ctx.scene.enter('createCabinetWizzard');
-    } else {
-        await ctx.scene.enter(scene, {user});
+    if (!user) {
+        await ctx.reply('Пользователь не найден. Пожалуйста, зарегистрируйтесь');
+        return;
     }
+
+    // if no phone then auth
+    if (!user.phone_number) {
+        await ctx.scene.enter('login_wizard');
+        return;
+    }
+
+    ctx.session.user = user;
+
+    console.log('user', user);
+
+
+    await ctx.scene.enter(scene, {user});
 }

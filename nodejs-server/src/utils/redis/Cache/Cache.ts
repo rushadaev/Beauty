@@ -21,7 +21,7 @@ class Cache {
     private prefix: string;
 
     constructor() {
-        this.prefix = 'wb_app_database_';
+        this.prefix = 'beauty_database_';
     }
 
     /**

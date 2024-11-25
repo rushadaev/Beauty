@@ -11,28 +11,23 @@ export const mainScene = new Scenes.BaseScene<MyContext>('main');
 
 // Define the enter handler
 mainScene.enter(async (ctx: MyContext) => {
-    const messageText = `⚡Я автоматически нахожу и бронирую доступные слоты на складах Wildberries. Выбирайте удобный тариф и бронируйте поставки.
-
-Выберите пункт в меню 👇`;
+    const messageText = `главный экран для управляющего`;
 
     const mainMenuKeyboard = Markup.inlineKeyboard([
         [
-            Markup.button.callback('📦 Автобронирование', 'autobooking')
+            Markup.button.callback('задачи', 'tasks')
         ],
         [
-            Markup.button.callback('⚡ Поиск слотов', 'searchslots'),
-            Markup.button.callback('🙌 Мои кабинеты', 'cabinets'),
+            Markup.button.callback('расчет зп', 'salary'),
+            Markup.button.callback('уведомления', 'notifications'),
         ],
         [
-            Markup.button.callback('📝 Мои задания', 'searchrequests'),
+            Markup.button.callback('трудоустройство', 'employment'),
 
         ],
         [
-            Markup.button.callback('💎 Подписка', 'payments'),
-            Markup.button.url('💬 Поддержка', 'https://t.me/helpybot_support'),
-        ],
-        [
-            Markup.button.url('📍 Инструкции', 'http://surl.li/awdppl')
+            Markup.button.callback('управление складом', 'warehouse'),
+            Markup.button.callback('управление персоналом', 'staff'),
         ]
     ]);
 
@@ -52,16 +47,26 @@ mainScene.enter(async (ctx: MyContext) => {
 });
 
 // Handle 'autobooking' action
-mainScene.action('autobooking', async (ctx: MyContext) => {
-    await cabinetGate(ctx, 'autoBookingWizard');
+mainScene.action('tasks', async (ctx: MyContext) => {
+  await ctx.scene.enter('tasks');
 });
 
-mainScene.action('searchrequests', async (ctx: MyContext) => {
-    await ctx.scene.enter('searchRequests');
+mainScene.action('salary', async (ctx: MyContext) => {
+    await ctx.scene.enter('salary');
 });
 
-mainScene.action('searchslots', async (ctx: MyContext) => {
-    await ctx.scene.enter('searchSlotsWizard');
+mainScene.action('notifications', async (ctx: MyContext) => {
+    await cabinetGate(ctx, 'notifications');
+});
+
+mainScene.action('employment', async (ctx: MyContext) => {
+    await ctx.scene.enter('employment');
+});
+mainScene.action('warehouse', async (ctx: MyContext) => {
+    await ctx.scene.enter('warehouse');
+});
+mainScene.action('staff', async (ctx: MyContext) => {
+    await ctx.scene.enter('staff');
 });
 
 mainScene.action('cabinets', async (ctx: MyContext) => {

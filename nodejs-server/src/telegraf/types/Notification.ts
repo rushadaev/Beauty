@@ -1,4 +1,8 @@
 export interface NotificationSettings {
+    sum?: string;
+    product_name?: string;
+    product_id?: number;
+
     type: string;
     chatId: string;
     warehouseId: number;

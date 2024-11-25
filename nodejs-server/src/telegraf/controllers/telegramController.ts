@@ -5,19 +5,21 @@ import { Redis as RedisStore } from '@telegraf/session/redis';
 import {MyContext, MySession} from "../types/MyContext";
 
 // Import mainScene from the new file
-import CacheService from '../../utils/redis/Cache/Cache';
 import { mainScene } from '../services/scenes/mainScene';
-import subscriptionWizard from "../services/scenes/subscriptionScene";
-import autoBookingWizard from "../services/scenes/autoBookingScene";
-import {searchRequestsScene} from "../services/scenes/searchRequestsScene";
-import cabinetWizzard from "../services/scenes/createCabinetScene";
-import searchSlotsWizard from "../services/scenes/searchSlotsScene";
-import LaravelService from "../../services/laravelService";
+import { tasksScene } from '../services/scenes/tasks/tasksScene';
 import {cabinetGate} from "../utils/cabinetGate";
-import showCabinetsScene from "../services/scenes/showCabinetsScene";
-import reauthCabinetWizzard from "../services/scenes/reauthCabinetScene";
-import axios, {AxiosResponse} from "axios";
-import {fmt} from "telegraf/format";
+import {salaryScene} from "../services/scenes/salary/salaryScene";
+import {notifictationsScene} from "../services/scenes/notifications/notificationsScene";
+import {employmentScene} from "../services/scenes/employment/employmentScene";
+import {warehouseScene} from "../services/scenes/warehouse/warehouseScene";
+import {staffScene} from "../services/scenes/staff/staffScene";
+import { createNotifictationScene as notificationsCreateNotificationScene } from "../services/scenes/notifications/createNotificationScene";
+import { notificationsListScene } from "../services/scenes/notifications/notificationsListScene";
+import { editNotificationScene as notificationsEditNotificationScene } from "../services/scenes/notifications/editNotificationScene";
+
+import { createNotifictationScene as warehouseCreateNotificationScene } from "../services/scenes/warehouse/createNotificationScene";
+import { editNotificationScene as warehouseEditNotificationScene } from "../services/scenes/warehouse/editNotificationScene";
+
 
 // If you have other scenes like subscriptionScene, consider importing them similarly
 
@@ -32,7 +34,21 @@ const store = RedisStore<MySession>({
 });
 
 // Initialize the stage with imported scenes
-const stage = new Scenes.Stage<MyContext>([mainScene, subscriptionWizard, autoBookingWizard, searchRequestsScene, cabinetWizzard, searchSlotsWizard, showCabinetsScene, reauthCabinetWizzard]);
+const stage = new Scenes.Stage<MyContext>([
+    mainScene,
+    tasksScene,
+    salaryScene,
+    notifictationsScene,
+    notificationsCreateNotificationScene,
+    notificationsListScene,
+    employmentScene,
+    warehouseScene,
+    staffScene,
+    notificationsEditNotificationScene,
+    warehouseScene,
+    warehouseCreateNotificationScene,
+    warehouseEditNotificationScene
+]);
 
 // Middleware to log incoming updates
 bot.use(session({ store }));
@@ -45,15 +61,7 @@ bot.use(async (ctx: MyContext, next: () => Promise<void>) => {
 // Handle /start command
 bot.start(async (ctx: MyContext) => {
     const startPayload = ctx.payload;
-
-    if (startPayload) {
-        if(startPayload === 'autobooking') {
-            await cabinetGate(ctx, 'autoBookingWizard');
-        }
-        await ctx.scene.enter('main');
-    } else {
-        await ctx.scene.enter('main');
-    }
+    await ctx.scene.enter('main');
 });
 
 // Handle 'mainmenu' action
@@ -75,58 +83,29 @@ mainScene.action('payments', async (ctx: MyContext) => {
     await ctx.scene.enter('subscriptionWizard');
 });
 
+bot.action('create_notification', async (ctx) => {
+    await ctx.scene.enter('create_notification');
+});
+
+bot.action('active_notifications', async (ctx) => {
+    await ctx.scene.enter('active_notifications');
+});
+
+bot.action('warehouse_notification', async (ctx) => {
+    await ctx.scene.enter('warehouse_create_notification');
+});
+
+bot.action('warehouse_list', async (ctx) => {
+    await ctx.scene.enter('warehouse_edit_notification');
+});
 
 bot.on('callback_query', async (ctx: MyContext) => {
     await ctx.answerCbQuery('👌');
 });
 
-bot.action('autobooking', async (ctx: MyContext) => {
-    await cabinetGate(ctx, 'autoBookingWizard');
-});
 
 
-export const createUserCabinetAndNotify = async (chatId: string, message: string, payload: any) => {
 
-    const telegramId = payload.telegramId;
-    const name = payload.credentials.name;
-    const phoneNumber = payload.credentials.phone;
-    const userId = payload.userId;
-    const statePath = payload.credentials.statePath;
-
-    try {
-
-        const checkCabinetInCache = await CacheService.get(`reauth_cabinet_${telegramId}`);
-        if(checkCabinetInCache) {
-
-            const cabinet = JSON.parse(checkCabinetInCache);
-
-            cabinet.settings.statePath = statePath;
-            cabinet.is_active = true;
-            await LaravelService.updateCabinetByTelegramId(telegramId, cabinet.id, {name: cabinet.name, settings: cabinet.settings});
-            await CacheService.forget(`reauth_cabinet_${telegramId}`);
-        } else {
-            const cabinet = await LaravelService.createCabinetByTelegramId(telegramId, name, phoneNumber, userId, statePath);
-        }
-    } catch (error) {
-        console.error('Error creating user cabinet:', error);
-        const keyboard = Markup.inlineKeyboard([
-            [Markup.button.callback('👌 Главное меню', 'mainmenu')],
-        ]);
-        await bot.telegram.sendMessage(chatId, '⚠️ Ошибка создания кабинета. Пожалуйста, попробуйте еще раз.', keyboard);
-    }
-    const messageText = fmt`🎉 Авторизация прошла успешно!
-
-🫡 Данные вашего кабинета
-
-📝 Название кабинета: ${name} 
-📞 Номер телефона: ${phoneNumber};
-    `;
-    const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('📦 Перейти в автобронирование', 'autobooking')],
-        [Markup.button.callback('👌 Главное меню', 'mainmenu')],
-    ]);
-    await bot.telegram.sendMessage(chatId, messageText, keyboard);
-};
 
 export const sendMessageToClient = async (chatId: string, message: string, isButtonAvailable = true) => {
 

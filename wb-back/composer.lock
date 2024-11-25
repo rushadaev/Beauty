@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "71dd8e3d35e8d730500867be113e2bd7",
+    "content-hash": "0672410a5b0cfea59c9066149c9b76fc",
     "packages": [
         {
             "name": "backpack/basset",
@@ -7092,6 +7092,67 @@
             "time": "2023-12-08T13:03:43+00:00"
         },
         {
+            "name": "vgrish/yclients-openapi-php",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/vgrish/yclients-openapi-php.git",
+                "reference": "96e8bf1b5b87234b4c156e39076b2ce1fdb729f9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/vgrish/yclients-openapi-php/zipball/96e8bf1b5b87234b4c156e39076b2ce1fdb729f9",
+                "reference": "96e8bf1b5b87234b4c156e39076b2ce1fdb729f9",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-mbstring": "*",
+                "guzzlehttp/guzzle": "^7.3",
+                "guzzlehttp/psr7": "^1.7 || ^2.0",
+                "php": ">=7.4"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.5",
+                "squizlabs/php_codesniffer": "~2.6"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Vgrish\\YclientsOpenApi\\": "lib/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Vgrish\\YclientsOpenApi\\": "test/"
+                }
+            },
+            "license": [
+                "unlicense"
+            ],
+            "authors": [
+                {
+                    "name": "Vgrish",
+                    "email": "vgrish@gmail.com"
+                }
+            ],
+            "description": "yclients-openapi-php package for YCLIENTS generated based on the openapi schema",
+            "homepage": "https://github.com/vgrish/yclients-openapi-php/",
+            "keywords": [
+                "api",
+                "openapi",
+                "rest",
+                "yclients"
+            ],
+            "support": {
+                "source": "https://github.com/vgrish/yclients-openapi-php/tree/1.0.1",
+                "issues": "https://github.com/vgrish/yclients-openapi-php/issues"
+            },
+            "time": "2024-08-04T10:12:43+00:00"
+        },
+        {
             "name": "vlucas/phpdotenv",
             "version": "v5.6.1",
             "source": {
@@ -9438,15 +9499,16 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
+        "laravel/sail": 20,
         "laravel/tinker": 20,
         "telegram-bot/api": 20,
-        "laravel/sail": 20
+        "vgrish/yclients-openapi-php": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.2"
     },
-    "platform-dev": [],
+    "platform-dev": {},
     "plugin-api-version": "2.6.0"
 }

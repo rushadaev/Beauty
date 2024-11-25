@@ -14,12 +14,12 @@ use App\Models\User;
 
 
 
-Artisan::command('warehouse_bot', function () {
-   CheckCoefficientChanges::dispatch(config('telegram.bot_token_supplies'));
-})->purpose('Fetch coefficients and check for changes')->everyMinute();
-
-
-
-Artisan::command('warehouse_bot_check_subscription_expiration', function () {
-   CheckSubscriptionExpiration::dispatch();
-})->purpose('Check subscription expiration')->hourly();
+// Artisan::command('warehouse_bot', function () {
+//    CheckCoefficientChanges::dispatch(config('telegram.bot_token_supplies'));
+// })->purpose('Fetch coefficients and check for changes')->everyMinute();
+//
+//
+//
+// Artisan::command('warehouse_bot_check_subscription_expiration', function () {
+//    CheckSubscriptionExpiration::dispatch();
+// })->purpose('Check subscription expiration')->hourly();
