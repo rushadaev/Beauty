@@ -18,14 +18,16 @@
         "backpack/crud": "^6.7",
         "backpack/theme-tabler": "^1.2",
         "google/apiclient": "^2.17",
+        "google/apiclient-services": "*",
         "laravel/framework": "^11.0",
         "laravel/horizon": "^5.27",
         "laravel/tinker": "dev-develop",
         "openai-php/laravel": "^0.10.1",
+        "phpoffice/phpword": "^1.3",
         "predis/predis": "^2.2",
         "telegram-bot/api": "dev-master",
-        "yoomoney/yookassa-sdk-php": "^3.5",
-        "vgrish/yclients-openapi-php": "dev-main"
+        "vgrish/yclients-openapi-php": "dev-main",
+        "yoomoney/yookassa-sdk-php": "^3.5"
     },
     "require-dev": {
         "backpack/generators": "^4.0",
@@ -79,7 +81,8 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
-        }
+        },
+        "process-timeout": 3600
     },
     "minimum-stability": "dev",
     "prefer-stable": true

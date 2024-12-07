@@ -2,11 +2,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Employee; // Добавляем импорт модели Employee
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log; // Добавляем этот импорт
+use Illuminate\Http\Request; // Добавьте этот импорт
 use App\Services\YclientsService;
 use Illuminate\Support\Facades\Redis;
 use Vgrish\YclientsOpenApi\Model\AuthUserRequest;
+
 
 class UserController extends Controller
 {
@@ -140,7 +144,9 @@ class UserController extends Controller
     /**
      * @throws \Exception
      */
-    public function auth(){
+    public function auth()
+{
+    try {
         $data = request()->validate([
             'phone' => 'required',
             'password' => 'required',
@@ -153,36 +159,137 @@ class UserController extends Controller
 
         $user = User::where('telegram_id', $telegramId)->first();
         if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Пользователь не найден'
+            ], 404);
+        }
+
+        $authResult = $this->yclientsService->authenticateByCredentials($phone, $password);
+        
+        if (!$authResult['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => $authResult['message']
+            ], 401);
         }
 
         auth()->login($user);
-
+        
         $user->update(['phone_number' => $phone]);
-
-
-        $key = $this->yclientsService->authenticateByCreds($telegramId, $password, $phone);
-
-        if (!$key) {
-            return response()->json(['error' => 'Invalid credentials'], 401);
-        }
 
         $newApiKey = $user->apiKeys()->create([
             'service' => 'yclients',
-            'api_key' => $key,
+            'api_key' => $authResult['token']
         ]);
 
+        $this->yclientsService->setUserToken($authResult['token']);
+        
         $company = $this->yclientsService->getMyCompany();
+        
+        if ($company) {
+            $user->update(['company_id' => $company['id']]);
+        }
 
-        $user->update(['company_id' => $company['id']]);
-
-
-
-        // Invalidate the cached user data after the update
         Cache::forget('user_telegram_id_' . $user->telegram_id);
 
-        return response()->json($key);
+        return response()->json([
+            'success' => true,
+            'token' => $authResult['token'],
+            'user' => $user->toArray()
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Auth error:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Ошибка сервера при авторизации'
+        ], 500);
     }
+}
+
+public function logout(Request $request)
+{
+    try {
+        $telegramId = $request->input('telegram_id');
+        
+        // Находим пользователя
+        $user = User::where('telegram_id', $telegramId)->first();
+        
+        if ($user) {
+            // Очищаем токен YClients
+            $user->apiKeys()->where('service', 'yclients')->delete();
+            
+            // Очищаем кэш в Redis
+            Cache::forget('user_telegram_id_' . $telegramId);
+            Redis::del("yclients_access_token_{$telegramId}");
+            
+            // Обновляем пользователя
+            $user->update([
+                'last_logout' => now(),
+                'yclients_token' => null
+            ]);
+        }
+
+        return response()->json(['success' => true]);
+    } catch (\Exception $e) {
+        Log::error('Logout error: ' . $e->getMessage());
+        return response()->json(['success' => false], 500);
+    }
+}
+
+// В UserController.php добавляем новый метод:
+
+public function updateDescription(Request $request)
+{
+    try {
+        $data = $request->validate([
+            'description' => 'required|string|max:1000',
+            'phone' => 'required|string',
+            'password' => 'required|string'
+        ]);
+
+        Log::info('Starting description update request', [
+            'phone' => $data['phone'],
+            'description_length' => strlen($data['description'])
+        ]);
+
+        // Вызываем обновленный метод сервиса
+        $result = $this->yclientsService->updateMasterDescription(
+            $data['phone'],
+            $data['password'],
+            $data['description']
+        );
+
+        if (!$result) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update description'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Description updated successfully'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error in updateDescription endpoint:', [
+            'error' => $e->getMessage(),
+            'phone' => $request->phone ?? null,
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update description: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
 
 }

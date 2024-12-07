@@ -1,22 +1,29 @@
 #!/bin/sh
 
-# Create a directory for cron jobs
+echo "Script starting at $(date)"
+
+# Create directories for cron jobs and logs
 mkdir -p /var/www/wb-back/cron.d
+mkdir -p /var/www/wb-back/storage/logs
 
-# Add your cron job here
-echo "* * * * * cd /var/www/wb-back && php artisan schedule:run --no-ansi >> /var/www/wb-back/storage/logs/cron.log 2>&1" > /var/www/wb-back/cron.d/laravel-schedule
+# Set initial permissions
+chown -R www-data:www-data /var/www/wb-back/storage
+chmod -R 775 /var/www/wb-back/storage
 
-# Temporary cron job for testing
-echo "* * * * * echo 'Cron is working at ' >> /var/www/wb-back/storage/logs/cron_test.log 2>&1" >> /var/www/wb-back/cron.d/laravel-schedule
+# Create crontab file
+cat > /var/www/wb-back/cron.d/laravel-schedule << 'CRON'
+# Laravel Scheduler
+* * * * * cd /var/www/wb-back && php artisan schedule:run --verbose >> /var/www/wb-back/storage/logs/scheduler.log 2>&1
 
-# Give execute permission to the cron job file
+# Branches sync - hourly
+0 * * * * cd /var/www/wb-back && php artisan app:fetch-branches-info >> /var/www/wb-back/storage/logs/branches-sync.log 2>&1
+
+# Full branches sync - daily at 3 AM
+0 3 * * * cd /var/www/wb-back && php artisan app:fetch-branches-info --full >> /var/www/wb-back/storage/logs/branches-sync-daily.log 2>&1
+CRON
+
+# Set crontab permissions
 chmod 0644 /var/www/wb-back/cron.d/laravel-schedule
 
-# Ensure correct permissions for logs directory and files
-chown -R www-data:www-data /var/www/wb-back/storage/logs
-chmod -R 775 /var/www/wb-back/storage/logs
-
 echo "Starting Supercronic..."
-
-# Start supercronic in the foreground (for Docker)
-supercronic /var/www/wb-back/cron.d/laravel-schedule
+exec supercronic /var/www/wb-back/cron.d/laravel-schedule

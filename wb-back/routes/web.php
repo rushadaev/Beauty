@@ -25,4 +25,4 @@ Route::get('/payment_link/{telegramId}/{tariff}', [PaymentController::class, 'ge
 
 
 
-Route::get('/replace-doc-variables', [GoogleDocsController::class, 'replaceVariablesInDoc']);
+

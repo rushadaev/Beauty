@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Api\V1\EmployeeRegistrationController;
+use App\Http\Controllers\Api\V1\ContractGeneratorController;
 
 Route::get('/wildberries/questions', [WildberriesController::class, 'getQuestions']);
 
@@ -44,3 +46,17 @@ Route::get('/staff', [UserController::class, 'getStaff']);
 
 Route::post('/auth', [UserController::class, 'auth']);
 
+Route::post('auth/logout', [UserController::class, 'logout']);
+
+Route::post('masters/update-description', [UserController::class, 'updateDescription']);
+
+Route::get('test', function() {
+    return response()->json(['status' => 'ok']);
+});
+
+Route::post('employee-registrations', [\App\Http\Controllers\Api\V1\EmployeeRegistrationController::class, 'store']);
+
+Route::post('employee-registrations/generate-contract', [\App\Http\Controllers\Api\V1\ContractGeneratorController::class, 'generate']);
+
+// routes/api.php
+Route::post('employee-registrations/{id}/upload-signed-documents', [\App\Http\Controllers\Api\V1\EmployeeRegistrationController::class, 'uploadSignedDocuments']);

@@ -9,11 +9,19 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libzip-dev \
     unzip \
-    git
+    git \
+    zlib1g-dev \
+    libxml2-dev
 
-RUN docker-php-ext-install pdo pdo_pgsql zip pcntl \
+    RUN docker-php-ext-install pdo pdo_pgsql zip pcntl \
+    && docker-php-ext-install fileinfo \
+    && docker-php-ext-install dom \
+    && docker-php-ext-install xml \
+    && docker-php-ext-install simplexml \
     && pecl install redis \
     && docker-php-ext-enable redis
+
+    
 
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -57,8 +65,9 @@ RUN curl -fsSLO "$SUPERCRONIC_URL/$SUPERCRONIC" \
     && mv "$SUPERCRONIC" "/usr/local/bin/supercronic"
 
 # Ensure cron directory exists and set up cron
-COPY cron-schedule.sh /usr/local/bin/cron-schedule.sh
-RUN chmod +x /usr/local/bin/cron-schedule.sh
+COPY ./cron-schedule.sh /usr/local/bin/cron-schedule.sh
+RUN chmod +x /usr/local/bin/cron-schedule.sh \
+    && chown www-data:www-data /usr/local/bin/cron-schedule.sh
 
 # Switch to www-data user
 USER www-data

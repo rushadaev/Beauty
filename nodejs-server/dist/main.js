@@ -971,6 +971,157 @@ class LaravelService {
             return null;
         }
     }
+    async submitRegistration(data) {
+        var _a;
+        try {
+            const formattedData = {
+                full_name: data.fullName,
+                birth_date: this.formatDate(data.birthDate),
+                passport_series_number: data.passport,
+                passport_issued_by: (_a = data.issuedBy) === null || _a === void 0 ? void 0 : _a.toUpperCase(),
+                passport_issue_date: this.formatDate(data.issueDate),
+                passport_division_code: data.divisionCode,
+                registration_address: data.registrationAddress,
+                inn: data.inn,
+                account_number: data.accountNumber,
+                bank_name: data.bankName,
+                bik: data.bik,
+                correspondent_account: data.corrAccount,
+                bank_inn: data.bankInn,
+                bank_kpp: data.bankKpp,
+                phone: data.phone,
+                email: data.email,
+                has_med_book: data.hasMedBook,
+                med_book_expiry: data.medBookExpiry ? this.formatDate(data.medBookExpiry) : null,
+                has_education_cert: data.hasEducationCert,
+                education_cert_photo: data.educationCertPhoto,
+                is_self_employed: data.isSelfEmployed,
+                status: 'pending'
+            };
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations`, formattedData, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error submitting registration:', error);
+            throw error;
+        }
+    }
+    // Добавьте также вспомогательный метод, если его еще нет
+    formatDate(dateStr) {
+        if (!dateStr)
+            return null;
+        const [day, month, year] = dateStr.split('.');
+        return `${year}-${month}-${day}`;
+    }
+    async generateContract(data) {
+        var _a;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/generate-contract`, data, {
+                headers: {
+                    'Accept': 'application/zip',
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer'
+            });
+            if (!response.data || response.data.length === 0) {
+                throw new Error('Empty response received');
+            }
+            // Проверяем заголовки ответа
+            const contentType = response.headers['content-type'];
+            if (contentType === null || contentType === void 0 ? void 0 : contentType.includes('application/json')) {
+                // Если получили JSON с ошибкой
+                const errorText = new TextDecoder().decode(response.data);
+                const error = JSON.parse(errorText);
+                throw new Error(error.message || 'Contract generation failed');
+            }
+            return Buffer.from(response.data);
+        }
+        catch (error) {
+            console.error('Contract generation error:', {
+                message: error.message,
+                response: (_a = error.response) === null || _a === void 0 ? void 0 : _a.data
+            });
+            throw error;
+        }
+    }
+    async logout(telegramId) {
+        try {
+            // Очищаем токен в Redis через бэкенд
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/auth/logout`, {
+                telegram_id: telegramId
+            });
+            // Очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
+        }
+        catch (error) {
+            console.error('Logout error:', error);
+            // Даже если запрос завершился с ошибкой, очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
+            // Не пробрасываем ошибку дальше, просто логируем
+        }
+    }
+    async updateMasterDescription(phone, password, description) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+        try {
+            console.log('Starting master description update:', {
+                phone,
+                descriptionLength: description.length
+            });
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/update-description`, {
+                phone,
+                password,
+                description
+            });
+            console.log('Full update description response:', {
+                status: response.status,
+                success: (_a = response.data) === null || _a === void 0 ? void 0 : _a.success,
+                message: (_b = response.data) === null || _b === void 0 ? void 0 : _b.message,
+                debug: (_c = response.data) === null || _c === void 0 ? void 0 : _c.debug // Для отладочной информации с бэкенда
+            });
+            if (!((_d = response.data) === null || _d === void 0 ? void 0 : _d.success)) {
+                console.error('Update description failed:', {
+                    message: (_e = response.data) === null || _e === void 0 ? void 0 : _e.message,
+                    debug: (_f = response.data) === null || _f === void 0 ? void 0 : _f.debug,
+                    responseData: response.data
+                });
+                return false;
+            }
+            return true;
+        }
+        catch (error) {
+            // Расширенное логирование ошибки
+            console.error('Error updating master description:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: {
+                    status: (_g = error === null || error === void 0 ? void 0 : error.response) === null || _g === void 0 ? void 0 : _g.status,
+                    statusText: (_h = error === null || error === void 0 ? void 0 : error.response) === null || _h === void 0 ? void 0 : _h.statusText,
+                    data: (_j = error === null || error === void 0 ? void 0 : error.response) === null || _j === void 0 ? void 0 : _j.data,
+                    debug: (_l = (_k = error === null || error === void 0 ? void 0 : error.response) === null || _k === void 0 ? void 0 : _k.data) === null || _l === void 0 ? void 0 : _l.debug
+                },
+                requestData: {
+                    phone,
+                    descriptionLength: description.length,
+                    url: `${this.laravelApiUrl}/masters/update-description`
+                }
+            });
+            // Специфичные ошибки
+            if (((_m = error === null || error === void 0 ? void 0 : error.response) === null || _m === void 0 ? void 0 : _m.status) === 401) {
+                throw new Error('Неверный логин или пароль');
+            }
+            if (((_o = error === null || error === void 0 ? void 0 : error.response) === null || _o === void 0 ? void 0 : _o.status) === 404) {
+                throw new Error('Мастер не найден в системе');
+            }
+            throw new Error('Не удалось обновить описание: ' +
+                (((_q = (_p = error === null || error === void 0 ? void 0 : error.response) === null || _p === void 0 ? void 0 : _p.data) === null || _q === void 0 ? void 0 : _q.message) || error.message));
+        }
+    }
     async fetchUsersFromApi(telegramId, user_id = null) {
         try {
             if (user_id === null) {
@@ -1001,8 +1152,107 @@ class LaravelService {
             throw new Error('Error authenticating');
         }
     }
+    // В LaravelService добавляем новый метод:
+    async uploadSignedDocuments(registrationId, files) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${registrationId}/upload-signed-documents`, {
+                files,
+                status: 'documents_uploaded' // Обновляем статус регистрации
+            }, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error uploading signed documents:', error);
+            throw error;
+        }
+    }
 }
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (new LaravelService());
+
+
+/***/ }),
+
+/***/ "./src/services/openaiService.ts":
+/*!***************************************!*\
+  !*** ./src/services/openaiService.ts ***!
+  \***************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   openAIService: () => (/* binding */ openAIService)
+/* harmony export */ });
+/* harmony import */ var openai__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! openai */ "openai");
+/* harmony import */ var openai__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(openai__WEBPACK_IMPORTED_MODULE_0__);
+
+class OpenAIService {
+    constructor() {
+        if (!process.env.OPENAI_API_KEY) {
+            throw new Error('OPENAI_API_KEY is not defined');
+        }
+        this.openai = new (openai__WEBPACK_IMPORTED_MODULE_0___default())({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+        this.prompt = `Войди в роль нейрокопирайтера, который прекрасно составляет описание мастеров по шугарингу. Описание мастера будет использоваться на сайте студии.
+        ВАЖНО: Описание ОБЯЗАТЕЛЬНО должно быть не более 300 символов и представлять собой законченный текст.
+        Найди имя мастера в тексте и используй его в описании. Если имя не найдено, используй нейтральное обращение "мастер".
+
+Учитывай информацию из инструкции: имя мастера и наброски описания от самого мастера. Опиши личные качества мастера, укажи на профессиональные качества, упомяни отзывы клиентов или результат работы. Заверши текст позитивной рекомендацией или акцентом на желании вернуться к мастеру. Текст должен быть теплым, дружелюбным и лаконичным. Максимальное кол-во символов описания: 300. В своем ответе укажи только описание и ничего больше. Пиши без воды, в человеческом стиле. 
+Данные по мастеру:
+Имя: Анна 
+Наброски описания от самого мастера: большой опыт работы
+Примеры стиля:
+'Анна умеет располагать к себе даже самого капризного клиента. Она всегда найдёт подход и интересную тему для общения. А ещё она легко и очень профессионально выполняет свою работу, что подтверждают многочисленные положительные отзывы. Вы точно захотите к ней вернуться!'
+'Снежана очень быстро и легко выполняет депиляцию как женщинам, так и мужчинам. Если Вы - не любитель долгих разговоров и длительных процедур, то это , безусловно, ваш мастер! Быстро, качественно и комфортно без лишних слов.'
+'Несмотря на малый опыт, Ксения уже завоевала сердца наших клиентов и заслуженно получила много положительных отзывов. Этот мастер очень внимателен к деталям. Индивидуальный подход к каждому клиенту и качественный результат для Ксении важнее всего.'
+'Анастасия - очень аккуратный и внимательный мастер. Её лёгкая рука сделает услугу максимально безболезненной и быстрой. А большой багаж знаний и опыта поможет без труда подобрать домашний уходу для любого типа кожи и волос. Анастасию ценят за её профессионализм и ответственный подход к работе.'
+В ответе укажи ТОЛЬКО готовое описание, уложившись в 300 символов.`;
+    }
+    async generateDescription(userInput) {
+        var _a, _b, _c, _d;
+        try {
+            const completion = await this.openai.chat.completions.create({
+                model: 'gpt-4o',
+                messages: [
+                    {
+                        role: 'system',
+                        content: this.prompt
+                    },
+                    {
+                        role: 'user',
+                        content: userInput
+                    }
+                ],
+                temperature: 0.7,
+                max_tokens: 500,
+                presence_penalty: 0.3,
+                frequency_penalty: 0.5
+            });
+            const generatedText = ((_c = (_b = (_a = completion.choices[0]) === null || _a === void 0 ? void 0 : _a.message) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.trim()) || '';
+            // Проверяем длину текста
+            if (generatedText.length > 300) {
+                return generatedText.substring(0, 300) + '...';
+            }
+            return generatedText;
+        }
+        catch (error) {
+            console.error('OpenAI API Error:', {
+                error: error.message,
+                userInput
+            });
+            if (((_d = error.response) === null || _d === void 0 ? void 0 : _d.status) === 429) {
+                throw new Error('Слишком много запросов. Пожалуйста, подождите немного и попробуйте снова.');
+            }
+            throw new Error('Не удалось сгенерировать описание. Пожалуйста, попробуйте позже.');
+        }
+    }
+}
+const openAIService = new OpenAIService();
 
 
 /***/ }),
@@ -1188,10 +1438,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_cabinetGate__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../utils/cabinetGate */ "./src/telegraf/utils/cabinetGate.ts");
 /* harmony import */ var _services_bot_master_scenes_loginWizard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/bot-master/scenes/loginWizard */ "./src/telegraf/services/bot-master/scenes/loginWizard.ts");
 /* harmony import */ var _services_bot_master_scenes_registrationWizard__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../services/bot-master/scenes/registrationWizard */ "./src/telegraf/services/bot-master/scenes/registrationWizard.ts");
+/* harmony import */ var _services_bot_master_scenes_changeDescriptionScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/bot-master/scenes/changeDescriptionScene */ "./src/telegraf/services/bot-master/scenes/changeDescriptionScene.ts");
 
  // Ensure correct path
 
 // Import mainScene from the new file
+
 
 
 
@@ -1207,6 +1459,7 @@ const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
     _services_bot_master_scenes_mainScene__WEBPACK_IMPORTED_MODULE_3__.mainScene,
     _services_bot_master_scenes_loginWizard__WEBPACK_IMPORTED_MODULE_5__.loginWizard,
     _services_bot_master_scenes_registrationWizard__WEBPACK_IMPORTED_MODULE_6__.registrationWizard,
+    _services_bot_master_scenes_changeDescriptionScene__WEBPACK_IMPORTED_MODULE_7__.changeDescriptionScene,
 ]);
 // Middleware to log incoming updates
 botMaster.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
@@ -1383,6 +1636,209 @@ const sendMessageToClient = async (chatId, message, isButtonAvailable = true) =>
 
 /***/ }),
 
+/***/ "./src/telegraf/services/bot-master/scenes/changeDescriptionScene.ts":
+/*!***************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/changeDescriptionScene.ts ***!
+  \***************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   changeDescriptionScene: () => (/* binding */ changeDescriptionScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _services_openaiService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/openaiService */ "./src/services/openaiService.ts");
+
+
+
+const changeDescriptionScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('change_description_scene', 
+// Шаг 1: Запрос описания
+async (ctx) => {
+    var _a, _b, _c;
+    ctx.session.descriptionForm = {};
+    ctx.session.isEditing = false;
+    console.log('Session state at description start:', {
+        sessionPhone: (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone,
+        sessionPassword: ((_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password) ? '[PRESENT]' : '[MISSING]',
+        sessionUser: ((_c = ctx.session) === null || _c === void 0 ? void 0 : _c.user) ? '[PRESENT]' : '[MISSING]'
+    });
+    await ctx.reply('Давайте подготовим ваше описание! Напишите пожалуйста своё имя и пару слов про себя, а искусственный интеллект сделает магию!', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]]));
+    return ctx.wizard.next();
+}, 
+// Шаг 2: Генерация и предварительный просмотр
+async (ctx) => {
+    var _a, _b;
+    if (!ctx.message || !('text' in ctx.message)) {
+        await ctx.reply('Пожалуйста, отправьте текстовое сообщение.');
+        return;
+    }
+    try {
+        const userInput = ctx.message.text;
+        const processingMessage = await ctx.reply('⏳ Генерируем описание...');
+        if (!ctx.session.descriptionForm) {
+            ctx.session.descriptionForm = {};
+        }
+        ctx.session.descriptionForm.tempDescription = userInput;
+        const newDescription = await _services_openaiService__WEBPACK_IMPORTED_MODULE_2__.openAIService.generateDescription(userInput);
+        ctx.session.descriptionForm.generatedDescription = newDescription;
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMessage.message_id).catch(() => { });
+        await ctx.reply('✨ Вот ваше новое описание:\n\n' +
+            newDescription + '\n\n' +
+            'Что бы вы хотели сделать с этим описанием?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Подтвердить и опубликовать', 'confirm_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Отредактировать', 'edit_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Сгенерировать заново', 'regenerate')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]
+        ]));
+        return ctx.wizard.next();
+    }
+    catch (error) {
+        console.error('Error in description generation:', {
+            error: error.message,
+            sessionState: {
+                phone: (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone,
+                hasPassword: !!((_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password)
+            }
+        });
+        await ctx.reply('Произошла ошибка при генерации описания. Пожалуйста, попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]));
+    }
+}, 
+// Шаг 3: Обработка редактирования
+async (ctx) => {
+    console.log('Step 3: Processing message, isEditing:', ctx.session.isEditing);
+    // Если это не режим редактирования, игнорируем сообщение
+    if (!ctx.session.isEditing) {
+        console.log('Step 3: Not in editing mode, skipping');
+        return;
+    }
+    if (!ctx.message || !('text' in ctx.message)) {
+        console.log('Step 3: No text in message');
+        await ctx.reply('Пожалуйста, отправьте текстовое сообщение.');
+        return;
+    }
+    try {
+        console.log('Step 3: Processing edited description');
+        const editedDescription = ctx.message.text;
+        if (editedDescription.length > 300) {
+            console.log('Step 3: Description too long');
+            await ctx.reply('❌ Описание не должно превышать 300 символов. Сейчас длина: ' + editedDescription.length + ' символов.\n' +
+                'Пожалуйста, сократите текст и отправьте снова.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]]));
+            return;
+        }
+        if (!ctx.session.descriptionForm) {
+            ctx.session.descriptionForm = {};
+        }
+        ctx.session.descriptionForm.generatedDescription = editedDescription;
+        ctx.session.isEditing = false;
+        await ctx.reply('📝 Проверьте отредактированное описание:\n\n' +
+            editedDescription + '\n\n' +
+            'Что бы вы хотели сделать с этим описанием?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Подтвердить и опубликовать', 'confirm_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Отредактировать ещё раз', 'edit_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Сгенерировать заново', 'regenerate')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]
+        ]));
+        console.log('Step 3: Description updated successfully');
+    }
+    catch (error) {
+        console.error('Step 3: Error processing description:', error);
+        await ctx.reply('❌ Произошла ошибка при обработке описания.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'edit_description')
+            ]]));
+    }
+});
+// Обработчики действий
+changeDescriptionScene.action('confirm_description', async (ctx) => {
+    var _a;
+    await ctx.answerCbQuery();
+    const description = (_a = ctx.session.descriptionForm) === null || _a === void 0 ? void 0 : _a.generatedDescription;
+    if (!description) {
+        await ctx.reply('Ошибка: описание не найдено. Попробуйте начать заново.');
+        return ctx.scene.reenter();
+    }
+    const processingMessage = await ctx.reply('⏳ Обновляем ваш профиль...');
+    try {
+        const updated = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterDescription(ctx.session.phone, ctx.session.password, description);
+        if (!updated) {
+            throw new Error('Не удалось обновить описание');
+        }
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMessage.message_id).catch(() => { });
+        await ctx.reply('✅ Описание успешно обновлено!\n\n' +
+            '💫 Новое описание уже доступно в вашем профиле.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 В главное меню', 'back_to_menu')]]));
+        return ctx.scene.enter('main');
+    }
+    catch (error) {
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMessage.message_id).catch(() => { });
+        await ctx.reply('❌ Произошла ошибка при обновлении профиля.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 В меню', 'back_to_menu')]
+        ]));
+    }
+});
+changeDescriptionScene.action('edit_description', async (ctx) => {
+    var _a;
+    console.log('Edit action triggered');
+    await ctx.answerCbQuery();
+    // Устанавливаем флаг редактирования
+    ctx.session.isEditing = true;
+    console.log('Set editing mode, isEditing:', ctx.session.isEditing);
+    await ctx.reply('✏️ Отправьте отредактированный вариант описания:\n\n' +
+        ((_a = ctx.session.descriptionForm) === null || _a === void 0 ? void 0 : _a.generatedDescription), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]]));
+});
+// Обработчик для "Сгенерировать заново"
+changeDescriptionScene.action('regenerate', async (ctx) => {
+    var _a;
+    await ctx.answerCbQuery();
+    if (!((_a = ctx.session.descriptionForm) === null || _a === void 0 ? void 0 : _a.tempDescription)) {
+        await ctx.reply('❌ Не удалось найти исходный текст. Начнем заново.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Начать заново', 'retry_description')
+            ]]));
+        return;
+    }
+    try {
+        const processingMessage = await ctx.reply('🤖 Генерируем новое описание...');
+        const newDescription = await _services_openaiService__WEBPACK_IMPORTED_MODULE_2__.openAIService.generateDescription(ctx.session.descriptionForm.tempDescription);
+        ctx.session.descriptionForm.generatedDescription = newDescription;
+        await ctx.telegram.deleteMessage(ctx.chat.id, processingMessage.message_id).catch(() => { });
+        await ctx.reply('✨ Вот новый вариант описания:\n\n' +
+            newDescription + '\n\n' +
+            'Что бы вы хотели сделать с этим описанием?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Подтвердить и опубликовать', 'confirm_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Отредактировать', 'edit_description')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Сгенерировать заново', 'regenerate')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel')]
+        ]));
+    }
+    catch (error) {
+        console.error('Error regenerating description:', error);
+        await ctx.reply('❌ Произошла ошибка при генерации нового описания.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'regenerate')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]));
+    }
+});
+changeDescriptionScene.action('retry_description', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+changeDescriptionScene.action('cancel', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Операция отменена');
+    return ctx.scene.enter('main');
+});
+changeDescriptionScene.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('main');
+});
+
+
+/***/ }),
+
 /***/ "./src/telegraf/services/bot-master/scenes/loginWizard.ts":
 /*!****************************************************************!*\
   !*** ./src/telegraf/services/bot-master/scenes/loginWizard.ts ***!
@@ -1398,18 +1854,30 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
 
 
-// Step 1: Initial menu display
+// Утилиты для работы с телефоном
+const formatPhone = (phone) => {
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('8')) {
+        cleaned = '7' + cleaned.slice(1);
+    }
+    if (!cleaned.startsWith('7')) {
+        cleaned = '7' + cleaned;
+    }
+    return cleaned;
+};
+const isValidPhone = (phone) => {
+    const cleaned = phone.replace(/\D/g, '');
+    return /^[78]\d{10}$/.test(cleaned);
+};
+// Шаг 1: Начальное меню
 const showMainMenu = async (ctx) => {
-    const messageText = `Первый экран бота`;
+    var _a;
+    const messageText = `Добро пожаловать в CherryTown! Выберите действие:`;
     const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('трудоустройство', 'registration'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('авторизация', 'authorization'),
-        ],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Трудоустройство', 'registration')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Авторизация', 'authorization')],
     ]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+    if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
         try {
             await ctx.editMessageText(messageText, mainMenuKeyboard);
         }
@@ -1420,52 +1888,194 @@ const showMainMenu = async (ctx) => {
     else {
         await ctx.reply(messageText, mainMenuKeyboard);
     }
-    return ctx.wizard.next(); // Move to the next step
+    return ctx.wizard.next();
 };
-// Step 2: Handle registration action
+// Шаг 2: Обработка регистрации
 const handleRegistration = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleRegistration.action('registration', async (ctx) => {
-    const message = `Трудоустройство`;
+    await ctx.answerCbQuery();
     await ctx.scene.enter('registration_wizard');
     return;
 });
-// Step 3: Handle authorization (phone input)
+// Шаг 3: Обработка авторизации и ввода телефона
 const handleAuthorization = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleAuthorization.action('authorization', async (ctx) => {
-    const message = `Введите номер телефона для авторизации в личном кабинете:`;
+    await ctx.answerCbQuery();
+    const message = `Введите ваш номер телефона в формате:\n+7XXXXXXXXXX`;
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_menu')],
     ]);
     await ctx.editMessageText(message, keyboard);
-    return ctx.wizard.next(); // Move to the phone input step
-});
-const handlePhoneInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-handlePhoneInput.on('text', async (ctx) => {
-    const phone = ctx.message.text;
-    ctx.scene.session.phone = phone;
-    await ctx.reply('Введите пароль от личного кабинета:');
     return ctx.wizard.next();
 });
+// Обработка ввода телефона
+const handlePhoneInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handlePhoneInput.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+handlePhoneInput.on('text', async (ctx) => {
+    const phone = formatPhone(ctx.message.text);
+    if (!isValidPhone(phone)) {
+        await ctx.reply('Неверный формат номера. Пожалуйста, введите номер в формате:\n+7XXXXXXXXXX', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_menu')]
+        ]));
+        return;
+    }
+    ctx.scene.session.phone = phone;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_phone')]
+    ]);
+    await ctx.reply('Введите пароль от личного кабинета YClients:', keyboard);
+    return ctx.wizard.next();
+});
+// Обработка ввода пароля
 const handlePasswordInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handlePasswordInput.action('back_to_phone', async (ctx) => {
+    await ctx.answerCbQuery();
+    const message = `Введите ваш номер телефона в формате:\n+7XXXXXXXXXX`;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_menu')],
+    ]);
+    await ctx.editMessageText(message, keyboard);
+    return ctx.wizard.back();
+});
+handlePasswordInput.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Очищаем данные сессии
+    if (ctx.session) {
+        ctx.session = {};
+    }
+    return ctx.scene.enter('login_wizard'); // Возвращаемся в начало сцены
+});
+// Утилита для задержки
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 handlePasswordInput.on('text', async (ctx) => {
+    var _a, _b;
     const password = ctx.message.text;
-    ctx.scene.session.password = password;
+    const phone = ctx.scene.session.phone;
     try {
-        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].auth(ctx.scene.session.phone, ctx.scene.session.password, ctx.from.id);
-        console.log('response', response);
+        await ctx.reply('⏳ Проверяем данные...');
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].auth(phone, password, ctx.from.id);
+        if (response === null || response === void 0 ? void 0 : response.success) {
+            // Сохраняем данные авторизации в сессию
+            ctx.session.phone = phone;
+            ctx.session.password = password;
+            // Также можно сохранить токен, если он нужен
+            if (response.token) {
+                ctx.session.apiToken = response.token;
+            }
+            // Сохраняем данные пользователя
+            if (response.user) {
+                ctx.session.user = response.user;
+            }
+            try {
+                const messagesToDelete = ctx.message.message_id;
+                for (let i = 0; i < 3; i++) {
+                    try {
+                        await ctx.deleteMessage(messagesToDelete - i);
+                    }
+                    catch (e) {
+                        // Игнорируем ошибки удаления
+                    }
+                }
+            }
+            catch (e) {
+                console.log('Could not delete messages:', e);
+            }
+            // Очищаем временные данные из сцены
+            delete ctx.scene.session.phone;
+            delete ctx.scene.session.password;
+            const successMsg = await ctx.reply('🔄 Авторизация...');
+            await delay(700);
+            await ctx.telegram.editMessageText(ctx.chat.id, successMsg.message_id, undefined, '✨ Проверяем данные...');
+            await delay(700);
+            await ctx.telegram.editMessageText(ctx.chat.id, successMsg.message_id, undefined, '🎉 Успешно! Добро пожаловать в личный кабинет.');
+            // Проверяем сохранение данных
+            console.log('Session after auth:', {
+                phone: ctx.session.phone,
+                hasPassword: !!ctx.session.password,
+                hasUser: !!ctx.session.user
+            });
+            await delay(1000);
+            return ctx.scene.enter('main');
+        }
+        const errorMsg = (response === null || response === void 0 ? void 0 : response.message) || 'Ошибка авторизации';
+        const errorMessage = await ctx.reply('❌ ' + errorMsg);
+        await delay(500);
+        const errorKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_auth')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]);
+        await ctx.telegram.editMessageText(ctx.chat.id, errorMessage.message_id, undefined, '❌ ' + errorMsg, { reply_markup: errorKeyboard.reply_markup });
     }
     catch (error) {
-        await ctx.reply('Ошибка авторизации. Попробуйте еще раз');
-        return ctx.scene.reenter();
+        console.error('Ошибка авторизации:', error);
+        let errorMessage = 'Ошибка авторизации. ';
+        if ((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.message) {
+            errorMessage += error.response.data.message;
+        }
+        else {
+            errorMessage += 'Проверьте введенные данные и попробуйте снова.';
+        }
+        const errorMsg = await ctx.reply('⚠️ Обработка...');
+        await delay(500);
+        const errorKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_auth')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]);
+        await ctx.telegram.editMessageText(ctx.chat.id, errorMsg.message_id, undefined, '❌ ' + errorMessage, { reply_markup: errorKeyboard.reply_markup });
     }
-    await ctx.reply('Авторизация успешна!');
-    return ctx.scene.leave();
 });
+// Обработчики кнопок
+handlePasswordInput.action('retry_auth', async (ctx) => {
+    await ctx.answerCbQuery();
+    const message = 'Введите ваш номер телефона в формате:\n+7XXXXXXXXXX';
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_menu')]
+    ]);
+    await ctx.editMessageText(message, keyboard);
+    return ctx.wizard.selectStep(2); // Возврат к вводу телефона
+});
+handlePasswordInput.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.scene.session) {
+        ctx.scene.session = {};
+    }
+    return ctx.scene.enter('login_wizard');
+});
+// Финальный шаг после успешной авторизации
+const handlePostLogin = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handlePostLogin.action('goto_master_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('master_menu_scene');
+});
+handlePostLogin.action('retry_auth', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+handlePostLogin.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+// Объединяем обработчики действий
 const handleAction = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleAction.use(handleRegistration);
 handleAction.use(handleAuthorization);
-// Define the wizard scene
-const loginWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('login_wizard', showMainMenu, handleAction, handlePhoneInput, handlePasswordInput);
+// Создаем сцену wizard
+const loginWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('login_wizard', showMainMenu, handleAction, handlePhoneInput, handlePasswordInput, handlePostLogin);
+// Добавляем middleware для обработки ошибок
+loginWizard.use(async (ctx, next) => {
+    try {
+        await next();
+    }
+    catch (error) {
+        console.error('Ошибка в login wizard:', error);
+        await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже или обратитесь к администратору.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]));
+    }
+});
 
 
 /***/ }),
@@ -1482,10 +2092,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
 
 const mainScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('main');
-// Define the enter handler
 mainScene.enter(async (ctx) => {
+    var _a;
     const messageText = `[главный экран для мастеров]`;
     const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [
@@ -1501,11 +2113,13 @@ mainScene.enter(async (ctx) => {
         [
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить фотографию', 'change_photo'),
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить график работы', 'change_schedule'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout') // Добавляем кнопку выхода
         ]
     ]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+    if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
         try {
-            // If the interaction is from a callback query, edit the existing message
             await ctx.editMessageText(messageText, mainMenuKeyboard);
         }
         catch (error) {
@@ -1513,14 +2127,95 @@ mainScene.enter(async (ctx) => {
         }
     }
     else {
-        // Otherwise, send a new message
         await ctx.reply(messageText, mainMenuKeyboard);
     }
 });
+// Обработчик выхода
+mainScene.action('logout', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('Выходим из аккаунта...');
+        // Сначала спрашиваем подтверждение
+        const confirmKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Да, выйти', 'confirm_logout'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'cancel_logout')
+            ]
+        ]);
+        await ctx.editMessageText('Вы уверены, что хотите выйти из аккаунта?', confirmKeyboard);
+    }
+    catch (error) {
+        console.error('Ошибка при выходе:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Подтверждение выхода
+mainScene.action('confirm_logout', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        // Очищаем данные на бэкенде
+        const telegramId = (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id;
+        if (telegramId) {
+            try {
+                await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].logout(telegramId);
+            }
+            catch (error) {
+                // Логируем ошибку, но продолжаем процесс выхода
+                console.error('Ошибка при очистке данных на бэкенде:', error);
+            }
+        }
+        // Показываем сообщение об успешном выходе в любом случае
+        await ctx.editMessageText('Вы успешно вышли из аккаунта.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Войти снова', 'start_login')]
+        ]));
+        // Переходим на сцену логина
+        return ctx.scene.enter('login_wizard');
+    }
+    catch (error) {
+        console.error('Ошибка при выходе:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте еще раз через несколько секунд.');
+        // В случае ошибки всё равно пытаемся вернуться к логину
+        return ctx.scene.enter('login_wizard');
+    }
+});
+// Отмена выхода
+mainScene.action('cancel_logout', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('Отменено');
+        return ctx.scene.reenter(); // Возвращаемся в главное меню
+    }
+    catch (error) {
+        console.error('Ошибка при отмене выхода:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+mainScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    const messageText = `[главный экран для мастеров]`;
+    const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('обучение', 'education'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('мои документы', 'documents'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('работа с клиентами', 'clients_management'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить описание', 'change_description'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить фотографию', 'change_photo'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить график работы', 'change_schedule'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout') // Добавляем кнопку выхода
+        ]
+    ]);
+    await ctx.editMessageText(messageText, mainMenuKeyboard);
+});
+// Остальные обработчики остаются без изменений
 mainScene.action('education', async (ctx) => {
-    const message = `[модуль обучения]
-
-ссылка на обучение`;
+    const message = `[модуль обучения]\n\nссылка на обучение`;
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.url('перейти к обучению', 'https://t.me/dmitrynovikov21')],
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
@@ -1528,9 +2223,7 @@ mainScene.action('education', async (ctx) => {
     await ctx.editMessageText(message, keyboard);
 });
 mainScene.action('documents', async (ctx) => {
-    const message = `[Мои документы]
-
-В кнопках выводим три документа из карточки мастера`;
+    const message = `[Мои документы]\n\nВ кнопках выводим три документа из карточки мастера`;
     const documentsKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('документ 1', 'document_1'),
@@ -1569,7 +2262,9 @@ mainScene.action('clients_management', async (ctx) => {
     await ctx.editMessageText(message, clientsManagementKeyboard);
 });
 mainScene.action('change_description', async (ctx) => {
-    ctx.reply('Изменить описание');
+    await ctx.answerCbQuery();
+    // Просто переходим в сцену без отправки сообщения
+    return ctx.scene.enter('change_description_scene');
 });
 mainScene.action('change_photo', async (ctx) => {
     ctx.reply('Изменить фотографию');
@@ -1593,7 +2288,111 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
 
+
+// Validation formats
+const ValidationFormats = {
+    FULL_NAME: /^[А-ЯЁ][а-яё]+(?:-[А-ЯЁ][а-яё]+)?\s[А-ЯЁ][а-яё]+(?:\s[А-ЯЁ][а-яё]+)?$/,
+    BIRTH_DATE: /^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$/,
+    PASSPORT: /^\d{4}\s\d{6}$/,
+    DIVISION_CODE: /^\d{3}-\d{3}$/,
+    INN: /^\d{12}$/,
+    ACCOUNT_NUMBER: /^\d{20}$/,
+    BIK: /^\d{9}$/,
+    CORR_ACCOUNT: /^\d{20}$/,
+    BANK_INN: /^\d{10}$/,
+    BANK_KPP: /^\d{9}$/,
+    PHONE: /^\+7\d{10}$/,
+    EMAIL: /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,61}[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/,
+    ISSUE_DATE: /^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$/,
+    MED_BOOK_EXPIRY: /^(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.\d{4}$/
+};
+// Validation messages
+const ValidationMessages = {
+    FULL_NAME: {
+        prompt: 'Напишите, пожалуйста, свое ФИО\n\nПример: Иванов Иван Иванович',
+        error: 'Неверный формат ФИО. ФИО должно содержать только русские буквы, пробелы и дефис.\n\nВведите, пожалуйста, корректное ФИО\nПример: Иванов Иван Иванович'
+    },
+    BIRTH_DATE: {
+        prompt: 'Напишите, пожалуйста, дату рождения\n\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.1990',
+        error: 'Неверный формат даты рождения.\n\nВведите дату в правильном формате\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.1990'
+    },
+    PASSPORT: {
+        prompt: 'Введите серию и номер паспорта\n\nФормат: СССС НННННН\nПример: 4444 555666',
+        error: 'Неверный формат паспортных данных.\n\nВведите серию и номер паспорта в правильном формате\nФормат: СССС НННННН\nПример: 4444 555666'
+    },
+    ISSUED_BY: {
+        prompt: 'Кем выдан паспорт?\n\nПример: ГУ МВД РОССИИ ПО МОСКОВСКОЙ ОБЛАСТИ',
+        error: 'Слишком короткое или длинное название органа.\n\nВведите корректное название органа, выдавшего паспорт\nПример: ГУ МВД РОССИИ ПО МОСКОВСКОЙ ОБЛАСТИ'
+    },
+    ISSUE_DATE: {
+        prompt: 'Дата выдачи паспорта\n\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2020',
+        error: 'Неверный формат даты выдачи.\n\nВведите дату в правильном формате\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2020'
+    },
+    DIVISION_CODE: {
+        prompt: 'Код подразделения\n\nФормат: XXX-XXX\nПример: 770-001',
+        error: 'Неверный формат кода подразделения.\n\nВведите код в правильном формате\nФормат: XXX-XXX\nПример: 770-001'
+    },
+    ADDRESS: {
+        prompt: 'Адрес регистрации\n\nПример: г. Москва, ул. Ленина, д. 1, кв. 1',
+        error: 'Слишком короткий или длинный адрес.\n\nВведите корректный адрес регистрации\nПример: г. Москва, ул. Ленина, д. 1, кв. 1'
+    },
+    INN: {
+        prompt: 'ИНН\n\nПример: 123456789012 (12 цифр)',
+        error: 'Неверный формат ИНН.\n\nВведите ИНН в правильном формате\nПример: 123456789012 (12 цифр)'
+    },
+    ACCOUNT_NUMBER: {
+        prompt: 'Номер счета\n\nПример: 40817810099910004312 (20 цифр)',
+        error: 'Неверный формат номера счета.\n\nВведите правильный номер счета\nПример: 40817810099910004312 (20 цифр)'
+    },
+    BANK_NAME: {
+        prompt: 'Банк получателя\n\nПример: ПАО СБЕРБАНК',
+        error: 'Некорректное название банка.\n\nВведите правильное название банка\nПример: ПАО СБЕРБАНК'
+    },
+    BIK: {
+        prompt: 'БИК\n\nПример: 044525225 (9 цифр)',
+        error: 'Неверный формат БИК.\n\nВведите БИК в правильном формате\nПример: 044525225 (9 цифр)'
+    },
+    CORR_ACCOUNT: {
+        prompt: 'Корреспондентский счет\n\nПример: 30101810400000000225 (20 цифр)',
+        error: 'Неверный формат корр. счета.\n\nВведите правильный Корреспондентский счет\nПример: 30101810400000000225 (20 цифр)'
+    },
+    BANK_INN: {
+        prompt: 'ИНН банка\n\nПример: 7707083893 (10 цифр)',
+        error: 'Неверный формат ИНН банка.\n\nВведите правильный ИНН банка\nПример: 7707083893 (10 цифр)'
+    },
+    BANK_KPP: {
+        prompt: 'КПП банка\n\nПример: 773601001 (9 цифр)',
+        error: 'Неверный формат КПП банка.\n\nВведите правильный КПП банка\nПример: 773601001 (9 цифр)'
+    },
+    PHONE: {
+        prompt: 'Ваш номер телефона\n\nФормат: +7XXXXXXXXXX\nПример: +79001234567',
+        error: 'Неверный формат номера телефона.\n\nВведите номер в правильном формате\nФормат: +7XXXXXXXXXX\nПример: +79001234567'
+    },
+    EMAIL: {
+        prompt: 'Ваша электронная почта\n\nПример: example@mail.ru',
+        error: 'Неверный формат email.\n\nВведите корректный email адрес\nПример: example@mail.ru'
+    },
+    MED_BOOK_EXPIRY: {
+        prompt: 'Дата окончания действия медицинской книжки\n\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025',
+        error: 'Неверный формат даты.\n\nВведите дату окончания медицинской книжки\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025'
+    }
+};
+// Validation helper functions
+const validateField = (value, type) => {
+    const pattern = ValidationFormats[type];
+    return pattern.test(value);
+};
+const validateIssuedBy = (value) => {
+    return value.length >= 5 && value.length <= 150;
+};
+const validateAddress = (value) => {
+    return value.length >= 10 && value.length <= 200;
+};
+const validateBankName = (value) => {
+    return value.length >= 3 && value.length <= 100;
+};
 // Helper function to create back button
 const getBackButton = () => {
     return telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
@@ -1627,7 +2426,7 @@ const showWelcome = async (ctx) => {
         isSelfEmployed: false
     };
     ctx.scene.session.registrationForm = registrationForm;
-    const messageText = 'Давайте вместе устроимся на работу?!';
+    const messageText = 'Давайте вместе устроимся на работу?!!!';
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Давайте', 'start_registration')]
     ]);
@@ -1657,7 +2456,7 @@ const checkSelfEmployment = async (ctx) => {
 // Handle self-employment response
 const handleSelfEmployment = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleSelfEmployment.action('self_employed_no', async (ctx) => {
-    ctx.scene.session.registrationForm.isSelfEmployed = true;
+    ctx.scene.session.registrationForm.isSelfEmployed = false;
     const messageText = 'Оформитесь как СМЗ и продолжите трудоустройство';
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.url('Оформиться', 'https://npd.nalog.ru/')],
@@ -1666,7 +2465,7 @@ handleSelfEmployment.action('self_employed_no', async (ctx) => {
     await ctx.editMessageText(messageText, keyboard);
 });
 handleSelfEmployment.action('self_employed_yes', async (ctx) => {
-    ctx.scene.session.registrationForm.isSelfEmployed = false;
+    ctx.scene.session.registrationForm.isSelfEmployed = true;
     return requestFullName(ctx);
 });
 handleSelfEmployment.action('continue_registration', async (ctx) => {
@@ -1674,105 +2473,208 @@ handleSelfEmployment.action('continue_registration', async (ctx) => {
 });
 // Request full name
 const requestFullName = async (ctx) => {
-    await ctx.reply('Отлично, теперь нам необходимо получить ваши данные для составления договора.\nНапишите, пожалуйста, свое ФИО');
+    await ctx.reply(ValidationMessages.FULL_NAME.prompt);
     return ctx.wizard.next();
 };
-// Handle full name input and subsequent steps
+// Handle full name input
 const handleFullName = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleFullName.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.fullName = ctx.message.text;
-    await ctx.reply('Напишите, пожалуйста, дату рождения');
+    const fullName = ctx.message.text;
+    if (!validateField(fullName, 'FULL_NAME')) {
+        await ctx.reply(ValidationMessages.FULL_NAME.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.fullName = fullName;
+    await ctx.reply(ValidationMessages.BIRTH_DATE.prompt);
     return ctx.wizard.next();
 });
-// Continue with other handlers for each step...
+// Handle birth date
+// Обновляем обработчик даты рождения
 const handleBirthDate = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleBirthDate.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.birthDate = ctx.message.text;
-    await ctx.reply('Паспорт: серия *номер *_');
+    const birthDate = ctx.message.text.trim();
+    if (!validateField(birthDate, 'BIRTH_DATE')) {
+        await ctx.reply(ValidationMessages.BIRTH_DATE.error);
+        return;
+    }
+    // Добавляем проверку на разумный возраст
+    const [day, month, year] = birthDate.split('.').map(Number);
+    const birthTimestamp = new Date(year, month - 1, day).getTime();
+    const now = new Date().getTime();
+    const age = (now - birthTimestamp) / (365.25 * 24 * 60 * 60 * 1000);
+    if (age < 18 || age > 100) {
+        await ctx.reply('Пожалуйста, проверьте правильность введенной даты. Возраст должен быть от 18 до 100 лет.');
+        return;
+    }
+    ctx.scene.session.registrationForm.birthDate = birthDate;
+    await ctx.reply(ValidationMessages.PASSPORT.prompt);
     return ctx.wizard.next();
 });
-// Add handlers for all remaining steps...
+// Handle passport
 const handlePassport = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handlePassport.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.passport = ctx.message.text;
-    await ctx.reply('Выдан:');
+    const passport = ctx.message.text;
+    if (!validateField(passport, 'PASSPORT')) {
+        await ctx.reply(ValidationMessages.PASSPORT.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.passport = passport;
+    await ctx.reply(ValidationMessages.ISSUED_BY.prompt);
     return ctx.wizard.next();
 });
+// Handle issued by
 const handleIssuedBy = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleIssuedBy.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.issuedBy = ctx.message.text;
-    await ctx.reply('Дата выдачи:');
+    const issuedBy = ctx.message.text;
+    if (!validateIssuedBy(issuedBy)) {
+        await ctx.reply(ValidationMessages.ISSUED_BY.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.issuedBy = issuedBy;
+    await ctx.reply(ValidationMessages.ISSUE_DATE.prompt);
     return ctx.wizard.next();
 });
+// Handle issue date
 const handleIssueDate = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleIssueDate.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.issueDate = ctx.message.text;
-    await ctx.reply('Код разделение:');
+    const issueDate = ctx.message.text;
+    if (!validateField(issueDate, 'ISSUE_DATE')) {
+        await ctx.reply(ValidationMessages.ISSUE_DATE.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.issueDate = issueDate;
+    await ctx.reply(ValidationMessages.DIVISION_CODE.prompt);
     return ctx.wizard.next();
 });
+// Handle division code
 const handleDivisionCode = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleDivisionCode.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.divisionCode = ctx.message.text;
-    await ctx.reply('Адрес регистрации:');
+    const divisionCode = ctx.message.text;
+    if (!validateField(divisionCode, 'DIVISION_CODE')) {
+        await ctx.reply(ValidationMessages.DIVISION_CODE.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.divisionCode = divisionCode;
+    await ctx.reply(ValidationMessages.ADDRESS.prompt);
     return ctx.wizard.next();
 });
+// Handle address
 const handleAddress = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleAddress.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.registrationAddress = ctx.message.text;
-    await ctx.reply('ИНН:');
+    const address = ctx.message.text;
+    if (!validateAddress(address)) {
+        await ctx.reply(ValidationMessages.ADDRESS.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.registrationAddress = address;
+    await ctx.reply(ValidationMessages.INN.prompt);
     return ctx.wizard.next();
 });
+// Handle INN
 const handleInn = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleInn.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.inn = ctx.message.text;
-    await ctx.reply('Номер счета:');
+    const inn = ctx.message.text;
+    if (!validateField(inn, 'INN')) {
+        await ctx.reply(ValidationMessages.INN.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.inn = inn;
+    await ctx.reply(ValidationMessages.ACCOUNT_NUMBER.prompt);
     return ctx.wizard.next();
 });
+// Handle account number
 const handleAccountNumber = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleAccountNumber.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.accountNumber = ctx.message.text;
-    await ctx.reply('Банк получателя:');
+    const accountNumber = ctx.message.text;
+    if (!validateField(accountNumber, 'ACCOUNT_NUMBER')) {
+        await ctx.reply(ValidationMessages.ACCOUNT_NUMBER.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.accountNumber = accountNumber;
+    await ctx.reply(ValidationMessages.BANK_NAME.prompt);
     return ctx.wizard.next();
 });
+// Handle bank name
 const handleBankName = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleBankName.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.bankName = ctx.message.text;
-    await ctx.reply('БИК:');
+    const bankName = ctx.message.text;
+    if (!validateBankName(bankName)) {
+        await ctx.reply(ValidationMessages.BANK_NAME.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.bankName = bankName;
+    await ctx.reply(ValidationMessages.BIK.prompt);
     return ctx.wizard.next();
 });
+// Handle BIK
 const handleBik = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleBik.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.bik = ctx.message.text;
-    await ctx.reply('Корр. счет:');
+    const bik = ctx.message.text;
+    if (!validateField(bik, 'BIK')) {
+        await ctx.reply(ValidationMessages.BIK.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.bik = bik;
+    await ctx.reply(ValidationMessages.CORR_ACCOUNT.prompt);
     return ctx.wizard.next();
 });
+// Handle correspondent account
 const handleCorrAccount = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleCorrAccount.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.corrAccount = ctx.message.text;
-    await ctx.reply('ИНН банка:');
+    const corrAccount = ctx.message.text;
+    if (!validateField(corrAccount, 'CORR_ACCOUNT')) {
+        await ctx.reply(ValidationMessages.CORR_ACCOUNT.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.corrAccount = corrAccount;
+    await ctx.reply(ValidationMessages.BANK_INN.prompt);
     return ctx.wizard.next();
 });
+// Handle bank INN
 const handleBankInn = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleBankInn.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.bankInn = ctx.message.text;
-    await ctx.reply('КПП банка:');
+    const bankInn = ctx.message.text;
+    if (!validateField(bankInn, 'BANK_INN')) {
+        await ctx.reply(ValidationMessages.BANK_INN.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.bankInn = bankInn;
+    await ctx.reply(ValidationMessages.BANK_KPP.prompt);
     return ctx.wizard.next();
 });
+// Handle bank KPP
 const handleBankKpp = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleBankKpp.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.bankKpp = ctx.message.text;
-    await ctx.reply('Ваш номер телефона:');
+    const bankKpp = ctx.message.text;
+    if (!validateField(bankKpp, 'BANK_KPP')) {
+        await ctx.reply(ValidationMessages.BANK_KPP.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.bankKpp = bankKpp;
+    await ctx.reply(ValidationMessages.PHONE.prompt);
     return ctx.wizard.next();
 });
+// Handle phone
 const handlePhone = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handlePhone.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.phone = ctx.message.text;
-    await ctx.reply('Ваша почта:');
+    const phone = ctx.message.text;
+    if (!validateField(phone, 'PHONE')) {
+        await ctx.reply(ValidationMessages.PHONE.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.phone = phone;
+    await ctx.reply(ValidationMessages.EMAIL.prompt);
     return ctx.wizard.next();
 });
+// Handle email
 const handleEmail = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleEmail.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.email = ctx.message.text;
+    const email = ctx.message.text;
+    if (!validateField(email, 'EMAIL')) {
+        await ctx.reply(ValidationMessages.EMAIL.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.email = email;
     await ctx.reply('У вас есть мед книжка?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Да', 'med_book_yes'),
@@ -1781,21 +2683,29 @@ handleEmail.on('text', async (ctx) => {
     ]));
     return ctx.wizard.next();
 });
+// Handle med book response
 const handleMedBook = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleMedBook.action('med_book_yes', async (ctx) => {
     ctx.scene.session.registrationForm.hasMedBook = true;
-    await ctx.reply('Когда она истекает?');
+    await ctx.reply(ValidationMessages.MED_BOOK_EXPIRY.prompt);
     return ctx.wizard.next();
 });
 handleMedBook.action('med_book_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasMedBook = false;
     return handleEducationCertQuestion(ctx);
 });
+// Handle med book expiry
 const handleMedBookExpiry = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleMedBookExpiry.on('text', async (ctx) => {
-    ctx.scene.session.registrationForm.medBookExpiry = ctx.message.text;
+    const medBookExpiry = ctx.message.text;
+    if (!validateField(medBookExpiry, 'MED_BOOK_EXPIRY')) {
+        await ctx.reply(ValidationMessages.MED_BOOK_EXPIRY.error);
+        return;
+    }
+    ctx.scene.session.registrationForm.medBookExpiry = medBookExpiry;
     return handleEducationCertQuestion(ctx);
 });
+// Handle education certificate question
 const handleEducationCertQuestion = async (ctx) => {
     await ctx.reply('У вас есть сертификат об образовании?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [
@@ -1805,6 +2715,7 @@ const handleEducationCertQuestion = async (ctx) => {
     ]));
     return ctx.wizard.next();
 };
+// Handle education certificate response
 const handleEducationCert = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleEducationCert.action('education_cert_yes', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = true;
@@ -1815,25 +2726,209 @@ handleEducationCert.action('education_cert_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = false;
     return handleFinalStep(ctx);
 });
+// Handle education certificate photo
 const handleEducationCertPhoto = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleEducationCertPhoto.on('photo', async (ctx) => {
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
     ctx.scene.session.registrationForm.educationCertPhoto = photo.file_id;
     return handleFinalStep(ctx);
 });
+// Создаем улучшенное хранилище для групп документов
+const documentGroups = new Map();
+// Функция логирования
+function logDebug(message, data) {
+    console.log(`[${new Date().toISOString()}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
+}
+const handleSignedDocuments = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handleSignedDocuments.on('document', async (ctx) => {
+    var _a;
+    const message = ctx.message;
+    const mediaGroupId = message.media_group_id;
+    const document = message.document;
+    logDebug('Получен новый документ:', {
+        mediaGroupId,
+        fileName: document.file_name,
+        fileId: document.file_id,
+        fileSize: document.file_size,
+        registrationId: ctx.scene.session.registrationId
+    });
+    // Проверяем формат файла
+    const fileName = (_a = document.file_name) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+    if (!(fileName === null || fileName === void 0 ? void 0 : fileName.endsWith('.pdf')) && !(fileName === null || fileName === void 0 ? void 0 : fileName.endsWith('.docx'))) {
+        logDebug('Некорректный формат файла:', { fileName });
+        await ctx.reply('Пожалуйста, отправляйте документы только в форматах PDF или DOCX');
+        return;
+    }
+    if (!mediaGroupId) {
+        logDebug('Документ отправлен не в группе');
+        await ctx.reply('Пожалуйста, отправьте все документы одним сообщением, выбрав их все сразу.');
+        return;
+    }
+    // Получаем или создаем группу документов
+    let group = documentGroups.get(mediaGroupId);
+    if (!group) {
+        logDebug('Создаем новую группу документов:', { mediaGroupId });
+        group = {
+            files: [],
+            processed: false
+        };
+        documentGroups.set(mediaGroupId, group);
+    }
+    // Добавляем документ в группу
+    group.files.push({
+        file_id: document.file_id,
+        file_name: document.file_name
+    });
+    logDebug('Добавлен документ в группу:', {
+        mediaGroupId,
+        totalFiles: group.files.length,
+        currentFile: document.file_name
+    });
+    // Очищаем предыдущий таймер если он есть
+    if (group.timer) {
+        clearTimeout(group.timer);
+    }
+    // Устанавливаем новый таймер для обработки группы
+    group.timer = setTimeout(async () => {
+        logDebug('Запуск обработки группы документов:', {
+            mediaGroupId,
+            filesCount: group.files.length
+        });
+        if (group.processed) {
+            logDebug('Группа уже была обработана:', { mediaGroupId });
+            return;
+        }
+        try {
+            group.processed = true;
+            // Проверяем наличие registrationId
+            const registrationId = ctx.scene.session.registrationId;
+            if (!registrationId) {
+                throw new Error('Отсутствует registrationId в сессии');
+            }
+            logDebug('Начинаем загрузку файлов:', {
+                mediaGroupId,
+                registrationId,
+                filesCount: group.files.length
+            });
+            // Загружаем и подготавливаем все документы
+            const uploadPromises = group.files.map(async (doc) => {
+                logDebug('Получаем информацию о файле от Telegram:', {
+                    fileId: doc.file_id,
+                    fileName: doc.file_name
+                });
+                const file = await ctx.telegram.getFile(doc.file_id);
+                const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN_MASTER}/${file.file_path}`;
+                logDebug('Получен URL файла:', {
+                    fileName: doc.file_name,
+                    fileUrl: fileUrl
+                });
+                return {
+                    url: fileUrl,
+                    name: doc.file_name
+                };
+            });
+            const uploadedFiles = await Promise.all(uploadPromises);
+            logDebug('Все файлы подготовлены к загрузке:', {
+                filesCount: uploadedFiles.length,
+                files: uploadedFiles.map(f => f.name)
+            });
+            // Отправляем документы в API
+            logDebug('Отправляем документы в API:', {
+                registrationId,
+                filesCount: uploadedFiles.length
+            });
+            const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].uploadSignedDocuments(registrationId, uploadedFiles);
+            logDebug('Получен ответ от API:', { response });
+            await ctx.reply('Спасибо! Документы успешно получены. В ближайшее время мы проверим их и сообщим вам о результатах.');
+            // Очищаем группу
+            documentGroups.delete(mediaGroupId);
+            logDebug('Группа документов успешно обработана и удалена:', { mediaGroupId });
+            return ctx.scene.leave();
+        }
+        catch (error) {
+            logDebug('Ошибка при обработке группы документов:', {
+                mediaGroupId,
+                error: error.message,
+                stack: error.stack
+            });
+            await ctx.reply('Произошла ошибка при обработке документов. Пожалуйста, попробуйте еще раз или обратитесь в поддержку.');
+            // Очищаем группу в случае ошибки
+            documentGroups.delete(mediaGroupId);
+        }
+    }, 2000); // Увеличиваем время ожидания до 2 секунд
+});
+// Handle final step
+// В handleFinalStep добавим:
 const handleFinalStep = async (ctx) => {
-    await ctx.reply('Отлично, мы подготовим договор и отправим вам его сюда.');
-    console.log(ctx.scene.session.registrationForm);
-    // Here you can add code to send the collected data to your backend
-    // try {
-    //     await laravelService.submitRegistration(ctx.scene.session);
-    // } catch (error) {
-    //     await ctx.reply('Произошла ошибка при отправке данных. Пожалуйста, попробуйте позже.');
-    // }
-    return ctx.scene.leave();
+    var _a;
+    await ctx.reply('Отлично, мы подготовим документы и отправим вам их сюда.');
+    try {
+        console.log('Attempting to submit registration with data:', ctx.scene.session.registrationForm);
+        const registrationResponse = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].submitRegistration(ctx.scene.session.registrationForm);
+        console.log('Registration submitted successfully:', registrationResponse);
+        const registrationId = registrationResponse.data.id;
+        ctx.scene.session.documentUpload = {
+            documents: [],
+            registrationId: registrationId
+        };
+        if (!registrationId) {
+            throw new Error('Registration ID not found in response');
+        }
+        const zipBuffer = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].generateContract({
+            id: registrationId
+        });
+        await ctx.replyWithDocument({
+            source: zipBuffer,
+            filename: `Документы_${registrationResponse.data.contract_number}.zip`
+        });
+        const instructions = `
+Пожалуйста, внимательно прочитайте инструкцию!!!
+
+1. Распакуйте полученный архив
+2. Подпишите все документы
+3. Отправьте ВСЕ подписанные документы ОДНИМ СООБЩЕНИЕМ в этот чат
+
+❗️ Важные требования:
+- Отправьте все документы одним сообщением (можно выбрать несколько файлов)
+- Принимаются файлы в форматах PDF или DOCX
+- Убедитесь, что все документы хорошо читаемы
+- Проверьте наличие всех подписей перед отправкой
+
+Чтобы отправить несколько файлов одним сообщением:
+📱 В мобильном приложении:
+1. Нажмите на скрепку
+2. Выберите "Файл"
+3. Нажмите на три точки в правом верхнем углу
+4. Выберите все нужные документы
+5. Нажмите "Отправить"
+
+💻 В десктопной версии:
+1. Нажмите на скрепку
+2. Зажмите Ctrl и выберите все нужные файлы
+3. Нажмите "Открыть"`;
+        await ctx.reply(instructions, { parse_mode: 'HTML' });
+        return ctx.wizard.next();
+    }
+    catch (error) {
+        console.error('Error in handleFinalStep:', error);
+        let errorMessage = 'Произошла ошибка при обработке данных. ';
+        if (((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) === 422) {
+            const validationErrors = error.response.data.errors;
+            if (validationErrors.email) {
+                errorMessage += 'Этот email уже зарегистрирован в системе. Пожалуйста, используйте другой email.';
+            }
+            else {
+                errorMessage += 'Пожалуйста, проверьте правильность введенных данных.';
+            }
+        }
+        else {
+            errorMessage += 'Пожалуйста, попробуйте позже.';
+        }
+        await ctx.reply(errorMessage);
+    }
 };
-// Create the wizard scene with all steps
-const registrationWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('registration_wizard', showWelcome, checkSelfEmployment, handleSelfEmployment, handleFullName, handleBirthDate, handlePassport, handleIssuedBy, handleIssueDate, handleDivisionCode, handleAddress, handleInn, handleAccountNumber, handleBankName, handleBik, handleCorrAccount, handleBankInn, handleBankKpp, handlePhone, handleEmail, handleMedBook, handleMedBookExpiry, handleEducationCert, handleEducationCertPhoto);
+// Create and export the wizard scene
+const registrationWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('registration_wizard', showWelcome, checkSelfEmployment, handleSelfEmployment, handleFullName, handleBirthDate, handlePassport, handleIssuedBy, handleIssueDate, handleDivisionCode, handleAddress, handleInn, handleAccountNumber, handleBankName, handleBik, handleCorrAccount, handleBankInn, handleBankKpp, handlePhone, handleEmail, handleMedBook, handleMedBookExpiry, handleEducationCert, handleEducationCertPhoto, handleSignedDocuments);
 
 
 /***/ }),
@@ -4407,6 +5502,16 @@ module.exports = require("express");
 
 /***/ }),
 
+/***/ "openai":
+/*!*************************!*\
+  !*** external "openai" ***!
+  \*************************/
+/***/ ((module) => {
+
+module.exports = require("openai");
+
+/***/ }),
+
 /***/ "php-serialize":
 /*!********************************!*\
   !*** external "php-serialize" ***!
@@ -4599,6 +5704,8 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+// Перед настройкой маршрутов добавляем установку webhook URL для каждого бота
+const WEBHOOK_DOMAIN = 'https://albacore-famous-opossum.ngrok-free.app';
 const app = express__WEBPACK_IMPORTED_MODULE_0___default()();
 const PORT = process.env.PORT || 3000;
 // Configure Winston (optional)
@@ -4619,10 +5726,18 @@ const logger = winston__WEBPACK_IMPORTED_MODULE_2___default().createLogger({
 });
 // Middleware
 app.use(body_parser__WEBPACK_IMPORTED_MODULE_1___default().json());
+// Основной бот
+_telegraf_controllers_telegramController__WEBPACK_IMPORTED_MODULE_4__["default"].telegram.setWebhook(`${WEBHOOK_DOMAIN}/webhook/main`)
+    .then(() => logger.info('Main bot webhook set'))
+    .catch(err => logger.error('Failed to set main bot webhook:', err));
+// Мастер бот
+_telegraf_controllers_telegramBotMasterController__WEBPACK_IMPORTED_MODULE_9__["default"].telegram.setWebhook(`${WEBHOOK_DOMAIN}/webhook/master`)
+    .then(() => logger.info('Master bot webhook set'))
+    .catch(err => logger.error('Failed to set master bot webhook:', err));
 // Routes
 // Webhook route
-app.use(_telegraf_controllers_telegramController__WEBPACK_IMPORTED_MODULE_4__["default"].webhookCallback('/webhook/telegram'));
-app.use(_telegraf_controllers_telegramBotMasterController__WEBPACK_IMPORTED_MODULE_9__["default"].webhookCallback('/webhook/telegram-master'));
+app.use(_telegraf_controllers_telegramController__WEBPACK_IMPORTED_MODULE_4__["default"].webhookCallback('/webhook/main'));
+app.use(_telegraf_controllers_telegramBotMasterController__WEBPACK_IMPORTED_MODULE_9__["default"].webhookCallback('/webhook/master'));
 app.use('/api/drafts', _routes_drafts__WEBPACK_IMPORTED_MODULE_5__["default"]);
 app.use('/api/orders', _routes_orders__WEBPACK_IMPORTED_MODULE_6__["default"]);
 app.use('/api/acceptance', _routes_acceptance__WEBPACK_IMPORTED_MODULE_7__["default"]);

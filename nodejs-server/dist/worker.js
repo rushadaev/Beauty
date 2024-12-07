@@ -662,6 +662,157 @@ class LaravelService {
             return null;
         }
     }
+    async submitRegistration(data) {
+        var _a;
+        try {
+            const formattedData = {
+                full_name: data.fullName,
+                birth_date: this.formatDate(data.birthDate),
+                passport_series_number: data.passport,
+                passport_issued_by: (_a = data.issuedBy) === null || _a === void 0 ? void 0 : _a.toUpperCase(),
+                passport_issue_date: this.formatDate(data.issueDate),
+                passport_division_code: data.divisionCode,
+                registration_address: data.registrationAddress,
+                inn: data.inn,
+                account_number: data.accountNumber,
+                bank_name: data.bankName,
+                bik: data.bik,
+                correspondent_account: data.corrAccount,
+                bank_inn: data.bankInn,
+                bank_kpp: data.bankKpp,
+                phone: data.phone,
+                email: data.email,
+                has_med_book: data.hasMedBook,
+                med_book_expiry: data.medBookExpiry ? this.formatDate(data.medBookExpiry) : null,
+                has_education_cert: data.hasEducationCert,
+                education_cert_photo: data.educationCertPhoto,
+                is_self_employed: data.isSelfEmployed,
+                status: 'pending'
+            };
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations`, formattedData, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error submitting registration:', error);
+            throw error;
+        }
+    }
+    // Добавьте также вспомогательный метод, если его еще нет
+    formatDate(dateStr) {
+        if (!dateStr)
+            return null;
+        const [day, month, year] = dateStr.split('.');
+        return `${year}-${month}-${day}`;
+    }
+    async generateContract(data) {
+        var _a;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/generate-contract`, data, {
+                headers: {
+                    'Accept': 'application/zip',
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer'
+            });
+            if (!response.data || response.data.length === 0) {
+                throw new Error('Empty response received');
+            }
+            // Проверяем заголовки ответа
+            const contentType = response.headers['content-type'];
+            if (contentType === null || contentType === void 0 ? void 0 : contentType.includes('application/json')) {
+                // Если получили JSON с ошибкой
+                const errorText = new TextDecoder().decode(response.data);
+                const error = JSON.parse(errorText);
+                throw new Error(error.message || 'Contract generation failed');
+            }
+            return Buffer.from(response.data);
+        }
+        catch (error) {
+            console.error('Contract generation error:', {
+                message: error.message,
+                response: (_a = error.response) === null || _a === void 0 ? void 0 : _a.data
+            });
+            throw error;
+        }
+    }
+    async logout(telegramId) {
+        try {
+            // Очищаем токен в Redis через бэкенд
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/auth/logout`, {
+                telegram_id: telegramId
+            });
+            // Очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
+        }
+        catch (error) {
+            console.error('Logout error:', error);
+            // Даже если запрос завершился с ошибкой, очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
+            // Не пробрасываем ошибку дальше, просто логируем
+        }
+    }
+    async updateMasterDescription(phone, password, description) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+        try {
+            console.log('Starting master description update:', {
+                phone,
+                descriptionLength: description.length
+            });
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/update-description`, {
+                phone,
+                password,
+                description
+            });
+            console.log('Full update description response:', {
+                status: response.status,
+                success: (_a = response.data) === null || _a === void 0 ? void 0 : _a.success,
+                message: (_b = response.data) === null || _b === void 0 ? void 0 : _b.message,
+                debug: (_c = response.data) === null || _c === void 0 ? void 0 : _c.debug // Для отладочной информации с бэкенда
+            });
+            if (!((_d = response.data) === null || _d === void 0 ? void 0 : _d.success)) {
+                console.error('Update description failed:', {
+                    message: (_e = response.data) === null || _e === void 0 ? void 0 : _e.message,
+                    debug: (_f = response.data) === null || _f === void 0 ? void 0 : _f.debug,
+                    responseData: response.data
+                });
+                return false;
+            }
+            return true;
+        }
+        catch (error) {
+            // Расширенное логирование ошибки
+            console.error('Error updating master description:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: {
+                    status: (_g = error === null || error === void 0 ? void 0 : error.response) === null || _g === void 0 ? void 0 : _g.status,
+                    statusText: (_h = error === null || error === void 0 ? void 0 : error.response) === null || _h === void 0 ? void 0 : _h.statusText,
+                    data: (_j = error === null || error === void 0 ? void 0 : error.response) === null || _j === void 0 ? void 0 : _j.data,
+                    debug: (_l = (_k = error === null || error === void 0 ? void 0 : error.response) === null || _k === void 0 ? void 0 : _k.data) === null || _l === void 0 ? void 0 : _l.debug
+                },
+                requestData: {
+                    phone,
+                    descriptionLength: description.length,
+                    url: `${this.laravelApiUrl}/masters/update-description`
+                }
+            });
+            // Специфичные ошибки
+            if (((_m = error === null || error === void 0 ? void 0 : error.response) === null || _m === void 0 ? void 0 : _m.status) === 401) {
+                throw new Error('Неверный логин или пароль');
+            }
+            if (((_o = error === null || error === void 0 ? void 0 : error.response) === null || _o === void 0 ? void 0 : _o.status) === 404) {
+                throw new Error('Мастер не найден в системе');
+            }
+            throw new Error('Не удалось обновить описание: ' +
+                (((_q = (_p = error === null || error === void 0 ? void 0 : error.response) === null || _p === void 0 ? void 0 : _p.data) === null || _q === void 0 ? void 0 : _q.message) || error.message));
+        }
+    }
     async fetchUsersFromApi(telegramId, user_id = null) {
         try {
             if (user_id === null) {
@@ -690,6 +841,25 @@ class LaravelService {
         catch (error) {
             console.error('Error authenticating:', error);
             throw new Error('Error authenticating');
+        }
+    }
+    // В LaravelService добавляем новый метод:
+    async uploadSignedDocuments(registrationId, files) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${registrationId}/upload-signed-documents`, {
+                files,
+                status: 'documents_uploaded' // Обновляем статус регистрации
+            }, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error uploading signed documents:', error);
+            throw error;
         }
     }
 }

@@ -9,6 +9,7 @@ import { mainScene } from '../services/bot-master/scenes/mainScene';
 import {cabinetGate} from "../utils/cabinetGate";
 import {loginWizard} from "../services/bot-master/scenes/loginWizard";
 import {registrationWizard} from "../services/bot-master/scenes/registrationWizard";
+import { changeDescriptionScene } from '../services/bot-master/scenes/changeDescriptionScene';
 // If you have other scenes like subscriptionScene, consider importing them similarly
 
 
@@ -25,6 +26,7 @@ const stage = new Scenes.Stage<MyContext>([
     mainScene,
     loginWizard,
     registrationWizard,
+    changeDescriptionScene,
 ]);
 
 // Middleware to log incoming updates

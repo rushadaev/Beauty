@@ -11,6 +11,10 @@ import acceptanceRoutes from './routes/acceptance';
 import yclientsRoutes from "./routes/yclientsRoutes";
 import botMaster from "./telegraf/controllers/telegramBotMasterController";
 
+
+
+// Перед настройкой маршрутов добавляем установку webhook URL для каждого бота
+const WEBHOOK_DOMAIN = 'https://albacore-famous-opossum.ngrok-free.app';
 const app: Application = express();
 const PORT: number | string = process.env.PORT || 3000;
 
@@ -35,10 +39,20 @@ export const logger = winston.createLogger({
 // Middleware
 app.use(bodyParser.json());
 
+// Основной бот
+bot.telegram.setWebhook(`${WEBHOOK_DOMAIN}/webhook/main`)
+    .then(() => logger.info('Main bot webhook set'))
+    .catch(err => logger.error('Failed to set main bot webhook:', err));
+
+// Мастер бот
+botMaster.telegram.setWebhook(`${WEBHOOK_DOMAIN}/webhook/master`)
+    .then(() => logger.info('Master bot webhook set'))
+    .catch(err => logger.error('Failed to set master bot webhook:', err));
+
 // Routes
 // Webhook route
-app.use(bot.webhookCallback('/webhook/telegram'));
-app.use(botMaster.webhookCallback('/webhook/telegram-master'));
+app.use(bot.webhookCallback('/webhook/main'));
+app.use(botMaster.webhookCallback('/webhook/master'));
 
 
 app.use('/api/drafts', draftsRoutes);

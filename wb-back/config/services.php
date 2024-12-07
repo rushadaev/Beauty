@@ -35,8 +35,9 @@ return [
     ],
 
     'yclients' => [
-        'partner_token' => env('YCLIENTS_PARTNER_TOKEN'),
-        'login'         => env('YCLIENTS_LOGIN'),
-        'password'      => env('YCLIENTS_PASSWORD'),
+        'partner_token' => env('YCLIENTS_PARTNER_TOKEN', 'rpxh9hw6sjakpdsha6r3'),
+        'user_token' => env('YCLIENTS_USER_TOKEN', 'eb4b7a6a59b300074be260e045ade57c'),
+        'login' => env('YCLIENTS_LOGIN', null),
+        'password' => env('YCLIENTS_PASSWORD', null),
     ],
 ];

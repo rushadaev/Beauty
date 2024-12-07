@@ -4,6 +4,7 @@ import axios from 'axios';
 import CacheService from '../utils/redis/Cache/Cache';
 import  {User, CreateCabinetResponse}  from '../telegraf/types/User';
 import {PaginatedNotifications} from "../telegraf/types/Notification";
+import { RegistrationSession } from '../telegraf/types/RegistrationSession';
 
 export interface Product {
     good_id: number;
@@ -498,6 +499,181 @@ class LaravelService {
         }
     }
 
+    public async submitRegistration(data: RegistrationSession): Promise<any> {
+        try {
+            const formattedData = {
+                full_name: data.fullName,
+                birth_date: this.formatDate(data.birthDate),
+                passport_series_number: data.passport,
+                passport_issued_by: data.issuedBy?.toUpperCase(),
+                passport_issue_date: this.formatDate(data.issueDate),
+                passport_division_code: data.divisionCode,
+                registration_address: data.registrationAddress,
+                inn: data.inn,
+                account_number: data.accountNumber,
+                bank_name: data.bankName,
+                bik: data.bik,
+                correspondent_account: data.corrAccount,
+                bank_inn: data.bankInn,
+                bank_kpp: data.bankKpp,
+                phone: data.phone,
+                email: data.email,
+                has_med_book: data.hasMedBook,
+                med_book_expiry: data.medBookExpiry ? this.formatDate(data.medBookExpiry) : null,
+                has_education_cert: data.hasEducationCert,
+                education_cert_photo: data.educationCertPhoto,
+                is_self_employed: data.isSelfEmployed,
+                status: 'pending'
+            };
+    
+            const response = await axios.post(
+                `${this.laravelApiUrl}/employee-registrations`,
+                formattedData,
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error submitting registration:', error);
+            throw error;
+        }
+    }
+    
+    // Добавьте также вспомогательный метод, если его еще нет
+    private formatDate(dateStr?: string): string | null {
+        if (!dateStr) return null;
+        const [day, month, year] = dateStr.split('.');
+        return `${year}-${month}-${day}`;
+    }
+
+    public async generateContract(data: { id: number }): Promise<Buffer> {
+        try {
+            const response = await axios.post(
+                `${this.laravelApiUrl}/employee-registrations/generate-contract`,
+                data,
+                {
+                    headers: {
+                        'Accept': 'application/zip',
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'arraybuffer'
+                }
+            );
+    
+            if (!response.data || response.data.length === 0) {
+                throw new Error('Empty response received');
+            }
+    
+            // Проверяем заголовки ответа
+            const contentType = response.headers['content-type'];
+            if (contentType?.includes('application/json')) {
+                // Если получили JSON с ошибкой
+                const errorText = new TextDecoder().decode(response.data);
+                const error = JSON.parse(errorText);
+                throw new Error(error.message || 'Contract generation failed');
+            }
+    
+            return Buffer.from(response.data);
+    
+        } catch (error) {
+            console.error('Contract generation error:', {
+                message: error.message,
+                response: error.response?.data
+            });
+            throw error;
+        }
+    }
+
+    public async logout(telegramId: number): Promise<void> {
+        try {
+            // Очищаем токен в Redis через бэкенд
+            await axios.post(`${this.laravelApiUrl}/auth/logout`, {
+                telegram_id: telegramId
+            });
+    
+            // Очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await CacheService.forget(cacheKey);
+    
+        } catch (error) {
+            console.error('Logout error:', error);
+            // Даже если запрос завершился с ошибкой, очищаем локальный кэш
+            const cacheKey = `user_telegram_id_${telegramId}`;
+            await CacheService.forget(cacheKey);
+            // Не пробрасываем ошибку дальше, просто логируем
+        }
+    }
+
+    public async updateMasterDescription(
+        phone: string,
+        password: string,
+        description: string
+    ): Promise<boolean> {
+        try {
+            console.log('Starting master description update:', {
+                phone,
+                descriptionLength: description.length
+            });
+    
+            const response = await axios.post(`${this.laravelApiUrl}/masters/update-description`, {
+                phone,
+                password,
+                description
+            });
+    
+            console.log('Full update description response:', {
+                status: response.status,
+                success: response.data?.success,
+                message: response.data?.message,
+                debug: response.data?.debug // Для отладочной информации с бэкенда
+            });
+    
+            if (!response.data?.success) {
+                console.error('Update description failed:', {
+                    message: response.data?.message,
+                    debug: response.data?.debug,
+                    responseData: response.data
+                });
+                return false;
+            }
+    
+            return true;
+        } catch (error: any) {
+            // Расширенное логирование ошибки
+            console.error('Error updating master description:', {
+                errorMessage: error?.message,
+                errorResponse: {
+                    status: error?.response?.status,
+                    statusText: error?.response?.statusText,
+                    data: error?.response?.data,
+                    debug: error?.response?.data?.debug
+                },
+                requestData: {
+                    phone,
+                    descriptionLength: description.length,
+                    url: `${this.laravelApiUrl}/masters/update-description`
+                }
+            });
+            
+            // Специфичные ошибки
+            if (error?.response?.status === 401) {
+                throw new Error('Неверный логин или пароль');
+            }
+            
+            if (error?.response?.status === 404) {
+                throw new Error('Мастер не найден в системе');
+            }
+            
+            throw new Error('Не удалось обновить описание: ' + 
+                (error?.response?.data?.message || error.message));
+        }
+    }
+
+
 
    private async fetchUsersFromApi(telegramId: number, user_id: number = null): Promise<any> {
         try {
@@ -527,6 +703,30 @@ class LaravelService {
             throw new Error('Error authenticating');
         }
    }
+
+// В LaravelService добавляем новый метод:
+public async uploadSignedDocuments(registrationId: number, files: Array<{url: string, name: string}>): Promise<any> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/employee-registrations/${registrationId}/upload-signed-documents`,
+            { 
+                files,
+                status: 'documents_uploaded' // Обновляем статус регистрации
+            },
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error uploading signed documents:', error);
+        throw error;
+    }
+}
+
 }
 
 

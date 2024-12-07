@@ -57,7 +57,7 @@ export interface MyWizardSession extends Scenes.WizardSessionData {
     notificationForm: NotificationForm;
     autobookingForm: AutoBookingForm;
 
-    registrationForm: RegistrationForm;
+    registrationForm: registrationForm;
     cabinetForm: CabinetForm;
     myWizardSessionProp: number;
     cabinetName: string;
@@ -65,8 +65,16 @@ export interface MyWizardSession extends Scenes.WizardSessionData {
     notificationSettings: NotificationSettings;
     test: string;
     drafts?: any[];
-
+    messageToEdit?: number;
     selectedCabinetId: string;
+    descriptionForm: DescriptionForm;
+    authData?: {
+        phone: string;
+        password: string;
+    };
+    isEditing: boolean;
+    documentUpload?: DocumentUploadSession;
+    registrationId?: number;
 }
 
 
@@ -116,8 +124,20 @@ export interface MySession extends Scenes.WizardSession<MySessionData> {
     count: any;
     userPreferences: UserPreferences;
     mySessionProp: number;
-
+    descriptionForm: DescriptionForm;
     searchRequestsPage: number;
+    phone: string;
+    password: string;
+    apiToken?: string; // Добавить это поле
+    auth?: {
+      success: boolean;
+      token?: string;
+      user?: any;
+    };
+    messageToEdit?: number;
+    isEditing: boolean;
+    documentUpload?: DocumentUploadSession;
+    registrationId?: number;
 }
 
 
@@ -156,6 +176,25 @@ export interface MyContext<U extends Update = Update> extends Context<U> {
     scene: Scenes.SceneContextScene<MyContext, MySessionData>;
     wizard: Scenes.WizardContextWizard<MyContext>;
     payload: string;
+}
+
+export interface DescriptionForm {
+    tempDescription?: string;
+    generatedDescription?: string;
+    originalInput?: string;
+    
+}
+
+// Добавляем интерфейс для загруженных документов
+export interface UploadedDocument {
+    file_id: string;
+    file_name: string;
+}
+
+// Интерфейс для сессии загрузки документов
+export interface DocumentUploadSession {
+    documents: UploadedDocument[];
+    registrationId: number;
 }
 
 type SearchRequestsContext = Scenes.SceneContext<SearchRequestsSession>;
