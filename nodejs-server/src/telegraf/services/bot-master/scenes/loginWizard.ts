@@ -1,6 +1,13 @@
 import { Scenes, Markup, Composer } from 'telegraf';
-import { MyContext } from '../../../types/MyContext';
+import { MyContext, MySession } from '../../../types/MyContext';
 import laravelService from "../../../../services/laravelService";
+
+interface SessionData {
+    phone?: string;
+    password?: string;
+    apiToken?: string;
+    user?: any;
+    }
 
 // Утилиты для работы с телефоном
 const formatPhone = (phone: string): string => {
@@ -106,14 +113,7 @@ handlePasswordInput.action('back_to_phone', async (ctx) => {
     return ctx.wizard.back();
 });
 
-handlePasswordInput.action('back_to_menu', async (ctx) => {
-    await ctx.answerCbQuery();
-    // Очищаем данные сессии
-    if (ctx.session) {
-        ctx.session = {};
-    }
-    return ctx.scene.enter('login_wizard'); // Возвращаемся в начало сцены
-});
+
 
 // Утилита для задержки
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -127,18 +127,16 @@ handlePasswordInput.on('text', async (ctx) => {
         const response = await laravelService.auth(phone, password, ctx.from.id);
         
         if (response?.success) {
-            // Сохраняем данные авторизации в сессию
-            ctx.session.phone = phone;
-            ctx.session.password = password;
-            
-            // Также можно сохранить токен, если он нужен
-            if (response.token) {
-                ctx.session.apiToken = response.token;
-            }
-
-            // Сохраняем данные пользователя
-            if (response.user) {
-                ctx.session.user = response.user;
+            if (ctx.session) {
+                // Инициализируем сессию с правильной структурой
+                const sessionData: SessionData = {
+                    phone,
+                    password,
+                    apiToken: response.token,
+                    user: response.user
+                };
+                
+                Object.assign(ctx.session, sessionData);
             }
 
             try {
@@ -241,11 +239,43 @@ handlePasswordInput.action('retry_auth', async (ctx) => {
     return ctx.wizard.selectStep(2); // Возврат к вводу телефона
 });
 
+const getInitialSession = (): Partial<MySession> => ({
+    user: { token: undefined, data: undefined },
+    notifications: [],
+    notificationForm: {
+        name: '',
+        dateTime: ''
+    },
+    notificationId: '',
+    searchRequestsType: '',
+    autobookingForm: {
+        warehouseId: '',
+        coefficient: '',
+        checkUntilDate: '',
+        boxTypeId: ''
+    },
+    page: 1,
+    selectedTariff: '',
+    count: null,
+    userPreferences: { notifications: 0 },
+    mySessionProp: 0,
+    searchRequestsPage: 0,
+    phone: '',
+    password: '',
+    isEditing: false
+});
+
 handlePasswordInput.action('back_to_menu', async (ctx) => {
     await ctx.answerCbQuery();
-    if (ctx.scene.session) {
-        ctx.scene.session = {};
+    
+    if (ctx.session) {
+        Object.assign(ctx.session, getInitialSession());
     }
+    
+    if (ctx.scene.session) {
+        Object.assign(ctx.scene.session, {});
+    }
+    
     return ctx.scene.enter('login_wizard');
 });
 

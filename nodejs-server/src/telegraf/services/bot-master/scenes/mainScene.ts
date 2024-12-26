@@ -167,27 +167,8 @@ mainScene.action('documents', async (ctx) => {
 });
 
 mainScene.action('clients_management', async (ctx) => {
-    const message = `[работа с клиентами]`;
-    const clientsManagementKeyboard = Markup.inlineKeyboard([
-        [
-            Markup.button.callback('изменить время услуги', 'change_service_time'),
-            Markup.button.callback('удалить услугу из заказа', 'delete_service_from_order'),
-        ],
-        [
-            Markup.button.callback('добавить услугу в заказ', 'add_service_to_order'),
-        ],
-        [
-            Markup.button.callback('изменить номер телефона', 'change_phone_number'),
-            Markup.button.callback('изменить состав заказа', 'change_order_content'),
-        ],
-        [
-            Markup.button.callback('отменить запись клиента', 'cancel_client_booking'),
-        ],
-        [
-            Markup.button.callback('👌 Главное меню', 'mainmenu'),
-        ]
-    ]);
-    await ctx.editMessageText(message, clientsManagementKeyboard);
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('clients_management_scene');
 });
 
 mainScene.action('change_description', async (ctx: MyContext) => {
@@ -197,9 +178,11 @@ mainScene.action('change_description', async (ctx: MyContext) => {
 });
 
 mainScene.action('change_photo', async (ctx) => {
-    ctx.reply('Изменить фотографию');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_photo_scene');
 });
 
 mainScene.action('change_schedule', async (ctx) => {
-    ctx.reply('Изменить график работы');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('schedule_management');
 });

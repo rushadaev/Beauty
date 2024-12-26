@@ -32,6 +32,7 @@ class EmployeeRegistration extends Model
         'has_education_cert',
         'education_cert_photo',
         'is_self_employed',
+        'master_price',  // Добавляем это поле
         'status',
         'contract_signed_at',
         'contract_expires_at',

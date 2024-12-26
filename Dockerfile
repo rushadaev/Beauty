@@ -11,15 +11,38 @@ RUN apt-get update && apt-get install -y \
     unzip \
     git \
     zlib1g-dev \
-    libxml2-dev
+    libxml2-dev \
+    libmagickwand-dev \
+    imagemagick
 
-    RUN docker-php-ext-install pdo pdo_pgsql zip pcntl \
-    && docker-php-ext-install fileinfo \
-    && docker-php-ext-install dom \
-    && docker-php-ext-install xml \
-    && docker-php-ext-install simplexml \
-    && pecl install redis \
-    && docker-php-ext-enable redis
+    # Install GD extension
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+&& docker-php-ext-install -j$(nproc) gd
+
+# Install ImageMagick extension
+RUN pecl install imagick \
+&& docker-php-ext-enable imagick
+
+    # Установка расширений по одному, без параллельной компиляции
+# PDO и PostgreSQL
+RUN docker-php-ext-install pdo
+RUN docker-php-ext-install pdo_pgsql
+
+# Базовые расширения
+RUN docker-php-ext-install zip
+RUN docker-php-ext-install pcntl
+
+# Файловые операции
+RUN docker-php-ext-install fileinfo
+
+# XML-группа
+RUN docker-php-ext-install dom
+RUN docker-php-ext-install xml
+RUN docker-php-ext-install simplexml
+
+# Redis через PECL
+RUN pecl install redis
+RUN docker-php-ext-enable redis
 
     
 

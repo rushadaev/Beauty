@@ -26,6 +26,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d/
       - ./nginx/certs:/etc/nginx/certs/
       - ./nginx/snippets:/etc/nginx/snippets
+      #- ./nginx/nginx.conf:/etc/nginx/nginx.conf  # Добавляем эту строку
     networks:
       - app-network
 
@@ -115,9 +116,9 @@ services:
     ports:
       - "3000:3000"  # Expose the Node.js server on port 3000
     volumes:
-      - ./nodejs-server:/usr/src/app
-      - ./nodejs-server/node_modules:/usr/src/app/node_modules
-      - ./wb-back/storage/state:/var/www/wb-back/storage/state
+      - ./nodejs-server:/usr/src/app:delegated
+      - /usr/src/app/node_modules
+      - ./wb-back/storage/state:/var/www/wb-back/storage/state:delegated
     networks:
       - app-network
     environment:
@@ -129,6 +130,7 @@ services:
       - TELEGRAM_BOT_TOKEN_MASTER=${TELEGRAM_BOT_TOKEN_MASTER}
       - LARAVEL_API_URL=${LARAVEL_API_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}  # Add this line
     command: >
       sh -c "
       npm run dev"

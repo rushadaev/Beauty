@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ngrok/ngrok": "^1.4.1",
     "@telegraf/session": "^2.0.0-beta.7",
     "axios": "^1.7.7",
     "body-parser": "^1.20.3",
@@ -20,8 +21,8 @@
     "bull": "^4.16.3",
     "dotenv": "^16.4.7",
     "electron": "^32.1.2",
-    "express": "^4.21.0",
-    "form-data": "^4.0.0",
+    "express": "^4.21.2",
+    "form-data": "^4.0.1",
     "openai": "^4.76.0",
     "php-serialize": "^5.0.1",
     "playwright": "^1.47.2",
@@ -31,23 +32,24 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "redis": "^4.7.0",
     "telegraf": "^4.16.3",
+    "typegram": "^5.2.0",
     "utf-8-validate": "^6.0.4",
     "uuid": "^10.0.0",
-    "winston": "^3.14.2"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@telegraf/types": "^7.1.0",
     "@types/body-parser": "^1.19.5",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.7.4",
+    "@types/node": "^22.10.1",
     "concurrently": "^9.0.1",
     "copy-webpack-plugin": "^12.0.2",
     "nodemon": "^3.1.7",
     "null-loader": "^4.0.1",
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2",
-    "webpack": "^5.95.0",
+    "typescript": "^5.7.2",
+    "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
     "webpack-node-externals": "^3.0.0"
   }

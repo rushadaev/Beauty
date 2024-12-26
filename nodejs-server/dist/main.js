@@ -614,7 +614,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "axios");
 /* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../utils/redis/Cache/Cache */ "./src/utils/redis/Cache/Cache.ts");
+/* harmony import */ var form_data__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! form-data */ "form-data");
+/* harmony import */ var form_data__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(form_data__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! node:fs */ "node:fs");
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(node_fs__WEBPACK_IMPORTED_MODULE_3__);
 // src/services/UserService.ts
+
+
 
 
 class LaravelService {
@@ -996,6 +1002,7 @@ class LaravelService {
                 has_education_cert: data.hasEducationCert,
                 education_cert_photo: data.educationCertPhoto,
                 is_self_employed: data.isSelfEmployed,
+                master_price: data.masterPrice, // Добавляем поле master_price
                 status: 'pending'
             };
             const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations`, formattedData, {
@@ -1026,7 +1033,10 @@ class LaravelService {
                     'Accept': 'application/zip',
                     'Content-Type': 'application/json'
                 },
-                responseType: 'arraybuffer'
+                responseType: 'arraybuffer', // Добавляем настройки для правильной обработки больших файлов
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+                timeout: 30000 // 30 секунд тайм-аут
             });
             if (!response.data || response.data.length === 0) {
                 throw new Error('Empty response received');
@@ -1149,7 +1159,41 @@ class LaravelService {
         }
         catch (error) {
             console.error('Error authenticating:', error);
-            throw new Error('Error authenticating');
+            throw error; // Пробрасываем ошибку дальше для обработки в обработчике
+        }
+    }
+    // Добавляем новый метод в LaravelService
+    async authAdmin(phone, password, telegram_id) {
+        var _a, _b;
+        try {
+            // Сначала получаем обычный ответ аутентификации
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/auth/admin`, {
+                phone,
+                password,
+                telegram_id
+            });
+            // Проверяем роль пользователя
+            if (response.data.success && response.data.user) {
+                const userRole = response.data.user.user_role_slug;
+                // Если роль не owner или administrator - возвращаем ошибку
+                if (!['owner', 'administrator'].includes(userRole)) {
+                    return {
+                        success: false,
+                        message: 'Доступ запрещен: недостаточно прав. Этот бот доступен только для владельцев и администраторов.'
+                    };
+                }
+            }
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error authenticating admin:', error);
+            if (axios__WEBPACK_IMPORTED_MODULE_0___default().isAxiosError(error) && ((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.message)) {
+                return {
+                    success: false,
+                    message: error.response.data.message
+                };
+            }
+            throw error;
         }
     }
     // В LaravelService добавляем новый метод:
@@ -1169,6 +1213,324 @@ class LaravelService {
         catch (error) {
             console.error('Error uploading signed documents:', error);
             throw error;
+        }
+    }
+    async getFilialStaff(telegramId, startDate, endDate, useAdminAuth = false) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/staff/filial`, {
+                params: {
+                    telegram_id: telegramId,
+                    start_date: startDate,
+                    end_date: endDate,
+                    use_admin_auth: useAdminAuth
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting filial staff:', error);
+            return null;
+        }
+    }
+    /**
+        * Получить расписание сотрудника
+        */
+    async getStaffSchedule(telegramId, startDate, endDate, useAdminAuth = false) {
+        var _a, _b, _c;
+        const cacheKey = `schedule_telegram_id_${telegramId}_${startDate}_${endDate}_${useAdminAuth}`;
+        try {
+            // Логируем входные параметры
+            console.log('getStaffSchedule request params:', {
+                telegramId,
+                startDate,
+                endDate,
+                useAdminAuth,
+                cacheKey,
+                apiUrl: `${this.laravelApiUrl}/schedule`
+            });
+            // Временно отключаем кэширование для отладки
+            // const schedule = await CacheService.rememberCacheValue(
+            //     cacheKey,
+            //     async () => {
+            try {
+                console.log('Making API request to get schedule...');
+                const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/schedule`, {
+                    params: {
+                        telegram_id: telegramId,
+                        start_date: startDate,
+                        end_date: endDate,
+                        use_admin_auth: useAdminAuth
+                    }
+                });
+                console.log('API Response received:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: response.headers,
+                    data: response.data
+                });
+                return response.data;
+            }
+            catch (apiError) {
+                console.error('API request error:', {
+                    error: apiError,
+                    response: (_a = apiError.response) === null || _a === void 0 ? void 0 : _a.data,
+                    status: (_b = apiError.response) === null || _b === void 0 ? void 0 : _b.status
+                });
+                throw apiError;
+            }
+            //     },
+            //     300
+            // );
+            // return schedule;
+        }
+        catch (error) {
+            console.error('Error in getStaffSchedule:', {
+                error: error.message,
+                stack: error.stack,
+                response: (_c = error.response) === null || _c === void 0 ? void 0 : _c.data
+            });
+            return null;
+        }
+    }
+    // Обновляем метод updateStaffSchedule с правильными типами
+    async updateStaffSchedule(telegramId, date, scheduleData, useAdminAuth) {
+        var _a, _b;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/schedule`, Object.assign({ telegram_id: telegramId, use_admin_auth: useAdminAuth }, scheduleData));
+            if (!response.data.success) {
+                console.error('Failed to update schedule:', response.data);
+                return null;
+            }
+            // Очищаем кэш для этой даты и соседних дат
+            const clearDate = new Date(date);
+            const startDate = new Date(clearDate);
+            startDate.setDate(clearDate.getDate() - 7);
+            const endDate = new Date(clearDate);
+            endDate.setDate(clearDate.getDate() + 7);
+            const cacheKey = `schedule_telegram_id_${telegramId}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
+            await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating staff schedule:', error);
+            if (axios__WEBPACK_IMPORTED_MODULE_0___default().isAxiosError(error)) {
+                const errorMessage = ((_b = (_a = error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.message) || error.message;
+                throw new Error(`Не удалось обновить расписание: ${errorMessage}`);
+            }
+            throw error;
+        }
+    }
+    /**
+     * Проверить доступность временного интервала
+     */
+    async checkTimeSlotAvailability(telegramId, date, startTime, endTime) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/schedule/check-availability`, {
+                params: {
+                    telegram_id: telegramId,
+                    date,
+                    start_time: startTime,
+                    end_time: endTime
+                }
+            });
+            return response.data.available || false;
+        }
+        catch (error) {
+            console.error('Error checking time slot availability:', error);
+            return false;
+        }
+    }
+    async updateMasterPhoto(telegramId, photoPath) {
+        try {
+            const form = new (form_data__WEBPACK_IMPORTED_MODULE_2___default())();
+            form.append('photo', node_fs__WEBPACK_IMPORTED_MODULE_3__.createReadStream(photoPath));
+            form.append('telegram_id', telegramId.toString());
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/update-photo`, form, {
+                headers: Object.assign({}, form.getHeaders())
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating master photo:', error);
+            throw error;
+        }
+    }
+    async getMasterRecords({ phone, password, params }) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
+        try {
+            console.log('Starting getMasterRecords:', {
+                phone,
+                date_range: params
+            });
+            // Делаем запрос к API для получения записей
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/records/master`, {
+                phone,
+                password,
+                start_date: params.start_date,
+                end_date: params.end_date
+            });
+            console.log('Records response received:', {
+                status: response.status,
+                success: (_a = response.data) === null || _a === void 0 ? void 0 : _a.success,
+                recordsCount: (_d = (_c = (_b = response.data) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0
+            });
+            // Проверяем успешность запроса
+            if (!((_e = response.data) === null || _e === void 0 ? void 0 : _e.success)) {
+                console.error('Failed to get master records:', {
+                    message: (_f = response.data) === null || _f === void 0 ? void 0 : _f.message,
+                    data: response.data
+                });
+                return {
+                    success: false,
+                    message: ((_g = response.data) === null || _g === void 0 ? void 0 : _g.message) || 'Не удалось получить записи'
+                };
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in getMasterRecords:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: {
+                    status: (_h = error === null || error === void 0 ? void 0 : error.response) === null || _h === void 0 ? void 0 : _h.status,
+                    statusText: (_j = error === null || error === void 0 ? void 0 : error.response) === null || _j === void 0 ? void 0 : _j.statusText,
+                    data: (_k = error === null || error === void 0 ? void 0 : error.response) === null || _k === void 0 ? void 0 : _k.data
+                },
+                requestData: {
+                    phone,
+                    date_range: params,
+                    url: `${this.laravelApiUrl}/records/master`
+                }
+            });
+            // Обработка специфических ошибок
+            if (((_l = error === null || error === void 0 ? void 0 : error.response) === null || _l === void 0 ? void 0 : _l.status) === 401) {
+                throw new Error('Неверный логин или пароль');
+            }
+            if (((_m = error === null || error === void 0 ? void 0 : error.response) === null || _m === void 0 ? void 0 : _m.status) === 404) {
+                throw new Error('Мастер не найден в системе');
+            }
+            throw new Error('Не удалось получить записи: ' +
+                (((_p = (_o = error === null || error === void 0 ? void 0 : error.response) === null || _o === void 0 ? void 0 : _o.data) === null || _p === void 0 ? void 0 : _p.message) || error.message));
+        }
+    }
+    // Получение деталей конкретной записи
+    async getMasterRecordDetails({ phone, password, recordId }) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+        try {
+            console.log('Starting getMasterRecordDetails:', {
+                phone,
+                recordId
+            });
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/records/master/details`, {
+                phone,
+                password,
+                record_id: recordId
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                console.error('Failed to get record details:', {
+                    message: (_b = response.data) === null || _b === void 0 ? void 0 : _b.message,
+                    data: response.data
+                });
+                return {
+                    success: false,
+                    message: ((_c = response.data) === null || _c === void 0 ? void 0 : _c.message) || 'Не удалось получить детали записи'
+                };
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in getMasterRecordDetails:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: {
+                    status: (_d = error === null || error === void 0 ? void 0 : error.response) === null || _d === void 0 ? void 0 : _d.status,
+                    statusText: (_e = error === null || error === void 0 ? void 0 : error.response) === null || _e === void 0 ? void 0 : _e.statusText,
+                    data: (_f = error === null || error === void 0 ? void 0 : error.response) === null || _f === void 0 ? void 0 : _f.data
+                }
+            });
+            if (((_g = error === null || error === void 0 ? void 0 : error.response) === null || _g === void 0 ? void 0 : _g.status) === 401) {
+                throw new Error('Неверный логин или пароль');
+            }
+            throw new Error('Не удалось получить детали записи: ' +
+                (((_j = (_h = error === null || error === void 0 ? void 0 : error.response) === null || _h === void 0 ? void 0 : _h.data) === null || _j === void 0 ? void 0 : _j.message) || error.message));
+        }
+    }
+    async cancelMasterRecord({ phone, password, recordId }) {
+        var _a, _b, _c, _d, _e;
+        try {
+            console.log('Starting cancelMasterRecord:', {
+                phone,
+                recordId
+            });
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/records/master/cancel`, {
+                phone,
+                password,
+                record_id: recordId
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось отменить запись');
+            }
+            return {
+                success: true,
+                message: response.data.message
+            };
+        }
+        catch (error) {
+            console.error('Error in cancelMasterRecord:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data
+            });
+            throw new Error('Не удалось отменить запись: ' +
+                (((_e = (_d = error === null || error === void 0 ? void 0 : error.response) === null || _d === void 0 ? void 0 : _d.data) === null || _e === void 0 ? void 0 : _e.message) || error.message));
+        }
+    }
+    async updateMasterRecord({ phone, password, recordId, updateData }) {
+        var _a, _b, _c, _d;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/records/master/update`, {
+                phone,
+                password,
+                record_id: recordId,
+                update_data: updateData
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось обновить запись');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in updateMasterRecord:', error);
+            throw new Error('Не удалось обновить запись: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async getMasterServices({ phone, password }) {
+        var _a, _b, _c, _d;
+        try {
+            console.log('Starting getMasterServices');
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/services/master`, {
+                phone,
+                password
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось получить список услуг');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in getMasterServices:', error);
+            throw new Error('Не удалось получить список услуг: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
         }
     }
 }
@@ -1439,6 +1801,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _services_bot_master_scenes_loginWizard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/bot-master/scenes/loginWizard */ "./src/telegraf/services/bot-master/scenes/loginWizard.ts");
 /* harmony import */ var _services_bot_master_scenes_registrationWizard__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../services/bot-master/scenes/registrationWizard */ "./src/telegraf/services/bot-master/scenes/registrationWizard.ts");
 /* harmony import */ var _services_bot_master_scenes_changeDescriptionScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/bot-master/scenes/changeDescriptionScene */ "./src/telegraf/services/bot-master/scenes/changeDescriptionScene.ts");
+/* harmony import */ var _services_bot_master_scenes_scheduleManagementScene__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../services/bot-master/scenes/scheduleManagementScene */ "./src/telegraf/services/bot-master/scenes/scheduleManagementScene.ts");
+/* harmony import */ var _services_bot_master_scenes_changePhotoScene__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../services/bot-master/scenes/changePhotoScene */ "./src/telegraf/services/bot-master/scenes/changePhotoScene.ts");
+/* harmony import */ var _services_bot_master_scenes_clientsManagementScene__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../services/bot-master/scenes/clientsManagementScene */ "./src/telegraf/services/bot-master/scenes/clientsManagementScene.ts");
+/* harmony import */ var _services_bot_master_scenes_cancel_booking_scene__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../services/bot-master/scenes/cancel_booking_scene */ "./src/telegraf/services/bot-master/scenes/cancel_booking_scene.ts");
+/* harmony import */ var _services_bot_master_scenes_change_phone_scene__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../services/bot-master/scenes/change_phone_scene */ "./src/telegraf/services/bot-master/scenes/change_phone_scene.ts");
+/* harmony import */ var _services_bot_master_scenes_delete_service_scene__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../services/bot-master/scenes/delete_service_scene */ "./src/telegraf/services/bot-master/scenes/delete_service_scene.ts");
+/* harmony import */ var _services_bot_master_scenes_add_service_scene__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../services/bot-master/scenes/add_service_scene */ "./src/telegraf/services/bot-master/scenes/add_service_scene.ts");
 
  // Ensure correct path
 
@@ -1449,6 +1818,13 @@ __webpack_require__.r(__webpack_exports__);
 
 
 // If you have other scenes like subscriptionScene, consider importing them similarly
+
+
+
+
+
+
+
 const botToken = process.env.TELEGRAM_BOT_TOKEN_MASTER;
 const botMaster = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Telegraf(botToken);
 const store = (0,_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_2__.Redis)({
@@ -1460,6 +1836,13 @@ const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
     _services_bot_master_scenes_loginWizard__WEBPACK_IMPORTED_MODULE_5__.loginWizard,
     _services_bot_master_scenes_registrationWizard__WEBPACK_IMPORTED_MODULE_6__.registrationWizard,
     _services_bot_master_scenes_changeDescriptionScene__WEBPACK_IMPORTED_MODULE_7__.changeDescriptionScene,
+    _services_bot_master_scenes_scheduleManagementScene__WEBPACK_IMPORTED_MODULE_8__.scheduleManagementScene,
+    _services_bot_master_scenes_changePhotoScene__WEBPACK_IMPORTED_MODULE_9__.changePhotoScene,
+    _services_bot_master_scenes_clientsManagementScene__WEBPACK_IMPORTED_MODULE_10__.clientsManagementScene,
+    _services_bot_master_scenes_cancel_booking_scene__WEBPACK_IMPORTED_MODULE_11__.cancelBookingScene,
+    _services_bot_master_scenes_change_phone_scene__WEBPACK_IMPORTED_MODULE_12__.changePhoneScene,
+    _services_bot_master_scenes_delete_service_scene__WEBPACK_IMPORTED_MODULE_13__.deleteServiceScene,
+    _services_bot_master_scenes_add_service_scene__WEBPACK_IMPORTED_MODULE_14__.addServiceScene,
 ]);
 // Middleware to log incoming updates
 botMaster.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
@@ -1520,14 +1903,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
 /* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @telegraf/session/redis */ "@telegraf/session/redis");
 /* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _services_scenes_mainScene__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../services/scenes/mainScene */ "./src/telegraf/services/scenes/mainScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminMainScene */ "./src/telegraf/services/bot-admin/scenes/adminMainScene.ts");
 /* harmony import */ var _services_scenes_tasks_tasksScene__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/scenes/tasks/tasksScene */ "./src/telegraf/services/scenes/tasks/tasksScene.ts");
-/* harmony import */ var _utils_cabinetGate__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../utils/cabinetGate */ "./src/telegraf/utils/cabinetGate.ts");
-/* harmony import */ var _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/scenes/salary/salaryScene */ "./src/telegraf/services/scenes/salary/salaryScene.ts");
-/* harmony import */ var _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsScene */ "./src/telegraf/services/scenes/notifications/notificationsScene.ts");
-/* harmony import */ var _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../services/scenes/employment/employmentScene */ "./src/telegraf/services/scenes/employment/employmentScene.ts");
-/* harmony import */ var _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../services/scenes/warehouse/warehouseScene */ "./src/telegraf/services/scenes/warehouse/warehouseScene.ts");
-/* harmony import */ var _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../services/scenes/staff/staffScene */ "./src/telegraf/services/scenes/staff/staffScene.ts");
+/* harmony import */ var _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../services/scenes/salary/salaryScene */ "./src/telegraf/services/scenes/salary/salaryScene.ts");
+/* harmony import */ var _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsScene */ "./src/telegraf/services/scenes/notifications/notificationsScene.ts");
+/* harmony import */ var _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../services/scenes/employment/employmentScene */ "./src/telegraf/services/scenes/employment/employmentScene.ts");
+/* harmony import */ var _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../services/scenes/warehouse/warehouseScene */ "./src/telegraf/services/scenes/warehouse/warehouseScene.ts");
+/* harmony import */ var _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../services/scenes/staff/staffScene */ "./src/telegraf/services/scenes/staff/staffScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminLoginWizard */ "./src/telegraf/services/bot-admin/scenes/adminLoginWizard.ts");
 /* harmony import */ var _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../services/scenes/notifications/createNotificationScene */ "./src/telegraf/services/scenes/notifications/createNotificationScene.ts");
 /* harmony import */ var _services_scenes_notifications_notificationsListScene__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsListScene */ "./src/telegraf/services/scenes/notifications/notificationsListScene.ts");
 /* harmony import */ var _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../services/scenes/notifications/editNotificationScene */ "./src/telegraf/services/scenes/notifications/editNotificationScene.ts");
@@ -1535,11 +1918,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _services_scenes_warehouse_editNotificationScene__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../services/scenes/warehouse/editNotificationScene */ "./src/telegraf/services/scenes/warehouse/editNotificationScene.ts");
 
 
- // Ensure correct path
-
-// Import mainScene from the new file
 
 
+// Импорты сцен управляющего
 
 
 
@@ -1548,90 +1929,734 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+// Импорты сцен уведомлений
 
 
 
-// If you have other scenes like subscriptionScene, consider importing them similarly
+// Импорты сцен склада
+
+
 const botToken = process.env.TELEGRAM_BOT_TOKEN_SUPPLIES_NEW;
 const bot = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Telegraf(botToken);
 const warehouseBot = new _services_warehouseBot__WEBPACK_IMPORTED_MODULE_1__["default"](bot);
 const store = (0,_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__.Redis)({
     url: 'redis://redis:6379/2',
 });
-// Initialize the stage with imported scenes
+// Инициализация stage со всеми сценами
 const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
-    _services_scenes_mainScene__WEBPACK_IMPORTED_MODULE_4__.mainScene,
+    _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_11__.adminLoginWizard,
+    _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_4__.adminMainScene,
     _services_scenes_tasks_tasksScene__WEBPACK_IMPORTED_MODULE_5__.tasksScene,
-    _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_7__.salaryScene,
-    _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_8__.notifictationsScene,
+    _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_6__.salaryScene,
+    _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_7__.notifictationsScene,
     _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_12__.createNotifictationScene,
     _services_scenes_notifications_notificationsListScene__WEBPACK_IMPORTED_MODULE_13__.notificationsListScene,
-    _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_9__.employmentScene,
-    _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_10__.warehouseScene,
-    _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_11__.staffScene,
+    _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_8__.employmentScene,
+    _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_9__.warehouseScene,
+    _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_10__.staffScene,
     _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_14__.editNotificationScene,
-    _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_10__.warehouseScene,
     _services_scenes_warehouse_createNotificationScene__WEBPACK_IMPORTED_MODULE_15__.createNotifictationScene,
     _services_scenes_warehouse_editNotificationScene__WEBPACK_IMPORTED_MODULE_16__.editNotificationScene
 ]);
-// Middleware to log incoming updates
+// Middleware
 bot.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
 bot.use(stage.middleware());
 bot.use(async (ctx, next) => {
     _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Received update', { update: ctx.update });
     await next();
 });
-// Handle /start command
+// Обработка команды /start
 bot.start(async (ctx) => {
-    const startPayload = ctx.payload;
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_login_wizard');
 });
-// Handle 'mainmenu' action
+// Обработка действия 'mainmenu'
 bot.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
-    await ctx.answerCbQuery('🏦Главная');
+    await ctx.scene.enter('admin_main');
+    await ctx.answerCbQuery('🏦 Главное меню');
 });
-// Handle /ping command
+// Обработка команды /ping
 bot.command('ping', (ctx) => {
     ctx.reply('pong!');
 });
-bot.command('autobooking', async (ctx) => {
-    await (0,_utils_cabinetGate__WEBPACK_IMPORTED_MODULE_6__.cabinetGate)(ctx, 'autoBookingWizard');
-});
-_services_scenes_mainScene__WEBPACK_IMPORTED_MODULE_4__.mainScene.action('payments', async (ctx) => {
-    await ctx.scene.enter('subscriptionWizard');
-});
+// Обработчики уведомлений
 bot.action('create_notification', async (ctx) => {
     await ctx.scene.enter('create_notification');
 });
 bot.action('active_notifications', async (ctx) => {
     await ctx.scene.enter('active_notifications');
 });
+// Обработчики склада
 bot.action('warehouse_notification', async (ctx) => {
     await ctx.scene.enter('warehouse_create_notification');
 });
 bot.action('warehouse_list', async (ctx) => {
     await ctx.scene.enter('warehouse_edit_notification');
 });
+// Общий обработчик callback_query
 bot.on('callback_query', async (ctx) => {
     await ctx.answerCbQuery('👌');
 });
+// Функция отправки сообщений клиенту
 const sendMessageToClient = async (chatId, message, isButtonAvailable = true) => {
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
     ]);
     try {
-        const response = await bot.telegram.sendMessage(chatId, message, isButtonAvailable ? keyboard : null);
-        console.log('Message sent to Telegram successfully!', response);
+        const response = await bot.telegram.sendMessage(chatId, message, isButtonAvailable ? { reply_markup: keyboard.reply_markup } : {});
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Message sent to Telegram successfully!', response);
         return true;
     }
     catch (error) {
-        console.error('Exception occurred while sending message:', error.message);
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Exception occurred while sending message:', error.message);
         return false;
     }
 };
-// Export the bot instance
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (bot);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/adminLoginWizard.ts":
+/*!********************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/adminLoginWizard.ts ***!
+  \********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   adminLoginWizard: () => (/* binding */ adminLoginWizard)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+// Утилиты для работы с телефоном
+const formatPhone = (phone) => {
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('8')) {
+        cleaned = '7' + cleaned.slice(1);
+    }
+    if (!cleaned.startsWith('7')) {
+        cleaned = '7' + cleaned;
+    }
+    return cleaned;
+};
+const isValidPhone = (phone) => {
+    const cleaned = phone.replace(/\D/g, '');
+    return /^[78]\d{10}$/.test(cleaned);
+};
+// Шаг 1: Начальное меню
+const showMainMenu = async (ctx) => {
+    var _a;
+    const messageText = `👋 Добро пожаловать в панель управления CherryTown!\n\n`
+        + `🎯 Здесь вы сможете:\n`
+        + `• Управлять персоналом\n`
+        + `• Контролировать записи\n`
+        + `• Работать со складом\n`
+        + `• Следить за уведомлениями\n`
+        + `• И многое другое!\n\n`
+        + `🔐 Для начала работы необходимо авторизоваться:`;
+    const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔑 Авторизация', 'admin_authorization')],
+    ]);
+    if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
+        try {
+            await ctx.editMessageText(messageText, mainMenuKeyboard);
+        }
+        catch (error) {
+            await ctx.reply(messageText, mainMenuKeyboard);
+        }
+    }
+    else {
+        await ctx.reply(messageText, mainMenuKeyboard);
+    }
+    return ctx.wizard.next();
+};
+// Обработка авторизации и ввода телефона
+const handleAdminAuthorization = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handleAdminAuthorization.action('admin_authorization', async (ctx) => {
+    await ctx.answerCbQuery();
+    const message = `📱 Введите ваш номер телефона в формате:\n+7XXXXXXXXXX`;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_admin_menu')],
+    ]);
+    await ctx.editMessageText(message, keyboard);
+    return ctx.wizard.next();
+});
+// Обработка ввода телефона
+const handlePhoneInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handlePhoneInput.action('back_to_admin_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+handlePhoneInput.on('text', async (ctx) => {
+    const phone = formatPhone(ctx.message.text);
+    if (!isValidPhone(phone)) {
+        await ctx.reply('❌ Неверный формат номера. Пожалуйста, введите номер в формате:\n+7XXXXXXXXXX', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_admin_menu')]
+        ]));
+        return;
+    }
+    ctx.scene.session.phone = phone;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_admin_phone')] // Обновляем название action
+    ]);
+    await ctx.reply('🔑 Введите пароль от личного кабинета YClients:', keyboard);
+    return ctx.wizard.next();
+});
+// Утилита для задержки
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Обработка ввода пароля
+const handlePasswordInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+handlePasswordInput.action('back_to_admin_phone', async (ctx) => {
+    await ctx.answerCbQuery();
+    const message = `📱 Введите ваш номер телефона в формате:\n+7XXXXXXXXXX`;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_admin_menu')], // Обновляем название action
+    ]);
+    await ctx.editMessageText(message, keyboard);
+    return ctx.wizard.back();
+});
+handlePasswordInput.on('text', async (ctx) => {
+    var _a, _b, _c;
+    const password = ctx.message.text;
+    const phone = ctx.scene.session.phone;
+    try {
+        await ctx.reply('⏳ Проверяем данные...');
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].authAdmin(phone, password, ctx.from.id);
+        if (response === null || response === void 0 ? void 0 : response.success) {
+            // Проверяем роль пользователя
+            const userRole = (_a = response.user) === null || _a === void 0 ? void 0 : _a.user_role_slug;
+            if (!['owner', 'administrator'].includes(userRole)) {
+                const errorMessage = await ctx.reply('❌ Доступ запрещен: недостаточно прав.\n\nЭтот бот доступен только для владельцев и администраторов.');
+                await delay(2000);
+                const errorKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_admin_menu')]
+                ]);
+                await ctx.telegram.editMessageText(ctx.chat.id, errorMessage.message_id, undefined, '❌ Доступ запрещен: недостаточно прав.\n\nЭтот бот доступен только для владельцев и администраторов.', { reply_markup: errorKeyboard.reply_markup });
+                return;
+            }
+            if (ctx.session) {
+                const sessionData = {
+                    phone,
+                    password,
+                    apiToken: response.token,
+                    user: response.user
+                };
+                Object.assign(ctx.session, sessionData);
+            }
+            try {
+                const messagesToDelete = ctx.message.message_id;
+                for (let i = 0; i < 3; i++) {
+                    try {
+                        await ctx.deleteMessage(messagesToDelete - i);
+                    }
+                    catch (e) {
+                        // Игнорируем ошибки удаления
+                    }
+                }
+            }
+            catch (e) {
+                console.log('Could not delete messages:', e);
+            }
+            // Очищаем временные данные
+            delete ctx.scene.session.phone;
+            delete ctx.scene.session.password;
+            const successMsg = await ctx.reply('🔄 Авторизация...');
+            await delay(700);
+            await ctx.telegram.editMessageText(ctx.chat.id, successMsg.message_id, undefined, '✨ Проверяем данные...');
+            await delay(700);
+            await ctx.telegram.editMessageText(ctx.chat.id, successMsg.message_id, undefined, '🎉 Успешно! Добро пожаловать в панель управления.');
+            await delay(1000);
+            return ctx.scene.enter('admin_main');
+        }
+        const errorMsg = (response === null || response === void 0 ? void 0 : response.message) || 'Ошибка авторизации';
+        const errorMessage = await ctx.reply('❌ ' + errorMsg);
+        await delay(500);
+        const errorKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_admin_auth')], // Обновляем название action
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_admin_menu')] // Обновляем название action
+        ]);
+        await ctx.telegram.editMessageText(ctx.chat.id, errorMessage.message_id, undefined, '❌ ' + errorMsg, { reply_markup: errorKeyboard.reply_markup });
+    }
+    catch (error) {
+        console.error('Ошибка авторизации:', error);
+        let errorMessage = 'Ошибка авторизации. ';
+        if ((_c = (_b = error.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.message) {
+            errorMessage += error.response.data.message;
+        }
+        else {
+            errorMessage += 'Проверьте введенные данные и попробуйте снова.';
+        }
+        const errorMsg = await ctx.reply('⚠️ Обработка...');
+        await delay(500);
+        const errorKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_admin_auth')], // Обновляем название action
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_admin_menu')] // Обновляем название action
+        ]);
+        await ctx.telegram.editMessageText(ctx.chat.id, errorMsg.message_id, undefined, '❌ ' + errorMessage, { reply_markup: errorKeyboard.reply_markup });
+    }
+});
+// Добавляем обработчики для кнопок после ошибки
+// Исправим обработчик retry_admin_auth
+handlePasswordInput.action('retry_admin_auth', async (ctx) => {
+    try {
+        await ctx.answerCbQuery(); // Сразу отвечаем на callback
+        await ctx.scene.reenter(); // Перезапускаем сцену
+    }
+    catch (error) {
+        console.error('Error in retry_admin_auth:', error);
+        // В случае ошибки просто пробуем перезапустить сцену
+        await ctx.scene.reenter();
+    }
+});
+// Исправим обработчик back_to_admin_menu
+handlePasswordInput.action('back_to_admin_menu', async (ctx) => {
+    try {
+        await ctx.answerCbQuery(); // Сразу отвечаем на callback
+        await ctx.scene.reenter(); // Перезапускаем сцену
+    }
+    catch (error) {
+        console.error('Error in back_to_admin_menu:', error);
+        // В случае ошибки просто пробуем перезапустить сцену
+        await ctx.scene.reenter();
+    }
+});
+// Создаем сцену wizard с новым именем
+const adminLoginWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('admin_login_wizard', // Обновляем название сцены
+showMainMenu, handleAdminAuthorization, handlePhoneInput, handlePasswordInput);
+// Добавляем middleware для обработки ошибок
+adminLoginWizard.use(async (ctx, next) => {
+    try {
+        await next();
+    }
+    catch (error) {
+        console.error('Ошибка в admin login wizard:', error);
+        await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже или обратитесь к администратору.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_admin_menu')]
+        ]));
+    }
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/adminMainScene.ts":
+/*!******************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/adminMainScene.ts ***!
+  \******************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   adminMainScene: () => (/* binding */ adminMainScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
+/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _utils_cabinetGate__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../../utils/cabinetGate */ "./src/telegraf/utils/cabinetGate.ts");
+
+
+
+
+
+const adminMainScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('admin_main');
+adminMainScene.enter(async (ctx) => {
+    // Получаем имя пользователя из сессии, если есть
+    var _a;
+    const messageText = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `
+🏢 *Панель управления CherryTown*
+
+👋 Добро пожаловать!
+
+📊 *Доступные функции:*
+- Управление персоналом и трудоустройство
+- Контроль выполнения задач
+- Расчёт заработной платы
+- Управление складом и остатками
+- Система уведомлений
+- Работа с клиентами
+
+ℹ️ Выберите нужный раздел:`;
+    const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👥 Управление персоналом', 'staff'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Задачи', 'tasks'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('💰 Расчет ЗП', 'salary'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏪 Управление складом', 'warehouse'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔔 Уведомления', 'notifications'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👥 Трудоустройство', 'employment'),
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
+        ]
+    ]);
+    try {
+        if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
+            await ctx.editMessageText(messageText, Object.assign(Object.assign({}, mainMenuKeyboard), { parse_mode: 'Markdown' }));
+        }
+        else {
+            await ctx.reply(messageText, Object.assign(Object.assign({}, mainMenuKeyboard), { parse_mode: 'Markdown' }));
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in adminMainScene.enter:', error);
+        await ctx.reply('Произошла ошибка при загрузке главного меню. Попробуйте еще раз.');
+    }
+});
+// Обработчик выхода
+adminMainScene.action('logout', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('Выходим из аккаунта...');
+        const confirmKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Да, выйти', 'confirm_logout'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'cancel_logout')
+            ]
+        ]);
+        await ctx.editMessageText('❓ Вы уверены, что хотите выйти из аккаунта?', confirmKeyboard);
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in logout handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Подтверждение выхода
+adminMainScene.action('confirm_logout', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const telegramId = (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id;
+        if (telegramId) {
+            try {
+                await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].logout(telegramId);
+            }
+            catch (error) {
+                _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error during backend logout:', error);
+            }
+        }
+        await ctx.editMessageText('👋 Вы успешно вышли из аккаунта.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔑 Войти снова', 'start_login')]
+        ]));
+        return ctx.scene.enter('admin_login_wizard');
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in confirm_logout handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте еще раз через несколько секунд.');
+        return ctx.scene.enter('admin_login_wizard');
+    }
+});
+// Отмена выхода
+adminMainScene.action('cancel_logout', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('Отменено');
+        return ctx.scene.reenter();
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in cancel_logout handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработчики переходов в другие сцены
+adminMainScene.action('tasks', async (ctx) => {
+    await ctx.answerCbQuery('📋 Переходим к задачам...');
+    await ctx.scene.enter('tasks');
+});
+adminMainScene.action('salary', async (ctx) => {
+    await ctx.answerCbQuery('💰 Расчет зарплаты...');
+    await ctx.scene.enter('salary');
+});
+adminMainScene.action('notifications', async (ctx) => {
+    await ctx.answerCbQuery('🔔 Уведомления...');
+    await (0,_utils_cabinetGate__WEBPACK_IMPORTED_MODULE_4__.cabinetGate)(ctx, 'notifications');
+});
+adminMainScene.action('employment', async (ctx) => {
+    await ctx.answerCbQuery('👥 Трудоустройство...');
+    await ctx.scene.enter('employment');
+});
+adminMainScene.action('warehouse', async (ctx) => {
+    await ctx.answerCbQuery('🏪 Управление складом...');
+    await ctx.scene.enter('warehouse');
+});
+adminMainScene.action('staff', async (ctx) => {
+    await ctx.answerCbQuery('👥 Управление персоналом...');
+    await ctx.scene.enter('staff');
+});
+// Обработчик возврата в главное меню
+adminMainScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery('🏠 Главное меню');
+    return ctx.scene.reenter();
+});
+// Обработка ошибок
+adminMainScene.use(async (ctx, next) => {
+    try {
+        await next();
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in adminMainScene:', error);
+        await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте позже или обратитесь к администратору.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Вернуться в главное меню', 'mainmenu')]
+        ]));
+    }
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/add_service_scene.ts":
+/*!**********************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/add_service_scene.ts ***!
+  \**********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   addServiceScene: () => (/* binding */ addServiceScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const addServiceScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('add_service_scene');
+// Вход в сцену
+addServiceScene.enter(async (ctx) => {
+    var _a;
+    const state = ctx.scene.state;
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId)) {
+            return ctx.reply('❌ Ошибка: не выбрана запись', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+                ]]));
+        }
+        // Сохраняем состояние
+        ctx.session.addServiceState = {
+            recordId: state.recordId,
+            phone: state.phone || ctx.session.phone,
+            password: state.password || ctx.session.password
+        };
+        // Получаем список доступных услуг
+        const services = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServices({
+            phone: ctx.session.addServiceState.phone,
+            password: ctx.session.addServiceState.password
+        });
+        if (!(services === null || services === void 0 ? void 0 : services.success) || !((_a = services.data) === null || _a === void 0 ? void 0 : _a.length)) {
+            return ctx.reply('❌ Нет доступных услуг для добавления', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
+                ]]));
+        }
+        // Создаем кнопки только с названиями услуг
+        const buttons = services.data.map(service => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(service.title, `add_service_${service.id}`)
+        ]));
+        // Добавляем кнопку отмены
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_service_add')
+        ]);
+        await ctx.reply('Выберите услугу для добавления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    }
+    catch (error) {
+        console.error('Error in addServiceScene enter:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
+            ]]));
+    }
+});
+// Обработка выбора услуги
+addServiceScene.action(/^add_service_(\d+)$/, async (ctx) => {
+    const state = ctx.session.addServiceState;
+    const serviceId = parseInt(ctx.match[1]);
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId) || !state.phone || !state.password) {
+            throw new Error('Отсутствуют необходимые данные');
+        }
+        await ctx.answerCbQuery();
+        const loadingMsg = await ctx.reply('🔄 Добавляем услугу...');
+        try {
+            // Получаем информацию об услуге
+            const services = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServices({
+                phone: state.phone,
+                password: state.password
+            });
+            const selectedService = services.data.find(s => s.id === serviceId);
+            if (!selectedService) {
+                throw new Error('Услуга не найдена');
+            }
+            const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterRecord({
+                phone: state.phone,
+                password: state.password,
+                recordId: state.recordId,
+                updateData: {
+                    services: {
+                        add: [{
+                                id: selectedService.id,
+                                cost: parseFloat(selectedService.price_min), // Добавляем цену
+                                first_cost: parseFloat(selectedService.price_min), // Добавляем начальную цену
+                                discount: 0
+                            }]
+                    }
+                }
+            });
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('✅ Услуга успешно добавлена', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К записи', 'back_to_record')
+                ]]));
+        }
+        catch (error) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('❌ ' + (error.message || 'Не удалось добавить услугу'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'cancel_service_add')
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error in service addition:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработка отмены
+addServiceScene.action('cancel_service_add', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.addServiceState) === null || _a === void 0 ? void 0 : _a.recordId;
+        delete ctx.session.addServiceState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in cancel_service_add:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Возврат к записи
+addServiceScene.action('back_to_record', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.addServiceState) === null || _a === void 0 ? void 0 : _a.recordId;
+        delete ctx.session.addServiceState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in back_to_record:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (addServiceScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/cancel_booking_scene.ts":
+/*!*************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/cancel_booking_scene.ts ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   cancelBookingScene: () => (/* binding */ cancelBookingScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const cancelBookingScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('cancel_booking_scene');
+cancelBookingScene.enter(async (ctx) => {
+    const state = ctx.scene.state;
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId)) {
+            return ctx.reply('❌ Ошибка: не выбрана запись для отмены', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+                ]]));
+        }
+        // Сохраняем состояние в сессии для использования в других обработчиках
+        ctx.session.cancelBookingState = {
+            recordId: state.recordId,
+            phone: state.phone || ctx.session.phone,
+            password: state.password || ctx.session.password
+        };
+        await ctx.reply('Вы уверены, что хотите отменить эту запись?\n\n' +
+            '⚠️ Это действие нельзя отменить!', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Да, отменить', 'confirm_cancel'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Нет, вернуться', 'back_to_record')
+            ]
+        ]));
+    }
+    catch (error) {
+        console.error('Error in cancelBookingScene enter:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_records')
+            ]]));
+    }
+});
+// Обработка подтверждения отмены
+cancelBookingScene.action('confirm_cancel', async (ctx) => {
+    const state = ctx.session.cancelBookingState;
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId) || !state.phone || !state.password) {
+            throw new Error('Отсутствуют необходимые данные для отмены записи');
+        }
+        await ctx.answerCbQuery();
+        const loadingMsg = await ctx.reply('🔄 Отменяем запись...');
+        try {
+            const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].cancelMasterRecord({
+                phone: state.phone,
+                password: state.password,
+                recordId: state.recordId
+            });
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('✅ Запись успешно отменена', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К списку записей', 'back_to_records')
+                ]]));
+        }
+        catch (error) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('❌ ' + (error.message || 'Не удалось отменить запись'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_record')
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error in confirm_cancel handler:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Возврат к деталям записи
+cancelBookingScene.action('back_to_record', async (ctx) => {
+    var _a;
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('clients_management_scene', {
+        action: 'show_record',
+        recordId: (_a = ctx.session.cancelBookingState) === null || _a === void 0 ? void 0 : _a.recordId
+    });
+});
+// Возврат к списку записей
+cancelBookingScene.action('back_to_records', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Очищаем состояние
+    delete ctx.session.cancelBookingState;
+    return ctx.scene.enter('clients_management_scene');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (cancelBookingScene);
 
 
 /***/ }),
@@ -1839,6 +2864,780 @@ changeDescriptionScene.action('back_to_menu', async (ctx) => {
 
 /***/ }),
 
+/***/ "./src/telegraf/services/bot-master/scenes/changePhotoScene.ts":
+/*!*********************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/changePhotoScene.ts ***!
+  \*********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   changePhotoScene: () => (/* binding */ changePhotoScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! node:fs */ "node:fs");
+/* harmony import */ var node_fs__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(node_fs__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! path */ "path");
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! axios */ "axios");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+
+
+
+
+
+
+const changePhotoScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('change_photo_scene');
+const MIN_SIZE = 800; // Минимальный размер для ширины и высоты
+const MAX_SIZE = 2000; // Максимальный размер для ширины и высоты
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 МБ в байтах
+// Вход в сцену
+changePhotoScene.enter(async (ctx) => {
+    const message = `
+📸 *Загрузка новой фотографии профиля*
+
+⚠️ *Требования к фото:*
+• Квадратный формат (1:1)
+• Размер от ${MIN_SIZE}x${MIN_SIZE} до ${MAX_SIZE}x${MAX_SIZE} пикселей
+• Формат JPG/JPEG
+• Размер файла до 5 МБ
+• Чёткое изображение на светлом фоне
+• Без посторонних предметов и людей
+• В деловом стиле
+
+✨ *Рекомендации:*
+• Хорошее освещение
+• Нейтральное выражение лица
+• Профессиональный внешний вид
+• Четкий фокус на лице
+
+🔄 Отправьте фото прямо сейчас или выберите действие:`;
+    await ctx.replyWithMarkdown(message, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить изменение фото', 'cancel_photo')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('ℹ️ Помощь по загрузке', 'photo_help')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+    ]));
+});
+// Обработка полученных фотографий
+changePhotoScene.on('photo', async (ctx) => {
+    try {
+        const photo = ctx.message.photo[ctx.message.photo.length - 1];
+        const file = await ctx.telegram.getFile(photo.file_id);
+        if (!file.file_path) {
+            throw new Error('Не удалось получить файл фотографии');
+        }
+        // Проверка размеров фото
+        if (photo.width < MIN_SIZE || photo.height < MIN_SIZE) {
+            await ctx.reply(`⚠️ Фото слишком маленькое. Минимальный размер ${MIN_SIZE}x${MIN_SIZE} пикселей.`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❓ Помощь с размером', 'size_help')]
+            ]));
+            return;
+        }
+        // Проверка квадратного формата
+        if (Math.abs(photo.width - photo.height) > 10) { // Допуск в 10 пикселей
+            await ctx.reply('⚠️ Фото должно быть квадратным (соотношение сторон 1:1).', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✂️ Как обрезать фото?', 'crop_help')]
+            ]));
+            return;
+        }
+        await ctx.reply('⌛ Обрабатываем фотографию...');
+        // Получаем файл
+        const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN_MASTER}/${file.file_path}`;
+        const response = await axios__WEBPACK_IMPORTED_MODULE_4___default()({
+            url: fileUrl,
+            method: 'GET',
+            responseType: 'arraybuffer'
+        });
+        // Проверка размера файла
+        if (response.data.length > MAX_FILE_SIZE) {
+            await ctx.reply('⚠️ Размер файла превышает 5 МБ. Пожалуйста, сожмите фото и попробуйте снова.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Как уменьшить размер?', 'size_reduce_help')]
+            ]));
+            return;
+        }
+        // Создаем временную директорию
+        const tempDir = path__WEBPACK_IMPORTED_MODULE_3__.join(__dirname, '../../../../../temp');
+        if (!node_fs__WEBPACK_IMPORTED_MODULE_2__.existsSync(tempDir)) {
+            node_fs__WEBPACK_IMPORTED_MODULE_2__.mkdirSync(tempDir, { recursive: true });
+        }
+        // Сохраняем файл временно
+        const tempFilePath = path__WEBPACK_IMPORTED_MODULE_3__.join(tempDir, `${ctx.from.id}_${Date.now()}.jpg`);
+        node_fs__WEBPACK_IMPORTED_MODULE_2__.writeFileSync(tempFilePath, response.data);
+        try {
+            const updateResult = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterPhoto(ctx.from.id, tempFilePath);
+            if (updateResult === null || updateResult === void 0 ? void 0 : updateResult.success) {
+                await ctx.reply('✅ Фотография успешно обновлена!\n\nВаш профиль теперь выглядит более профессионально.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👀 Посмотреть мой профиль', 'view_profile')],
+                    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+                ]));
+            }
+            else {
+                throw new Error('Не удалось обновить фотографию');
+            }
+        }
+        finally {
+            // Удаляем временный файл
+            if (node_fs__WEBPACK_IMPORTED_MODULE_2__.existsSync(tempFilePath)) {
+                node_fs__WEBPACK_IMPORTED_MODULE_2__.unlinkSync(tempFilePath);
+            }
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_5__["default"].error('Error updating photo:', error);
+        await ctx.reply('❌ Произошла ошибка при обновлении фотографии.\n\nПожалуйста, попробуйте позже или обратитесь в поддержку.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'retry_photo')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+        ]));
+    }
+});
+// Обработчики действий
+changePhotoScene.action('retry_photo', async (ctx) => {
+    await ctx.answerCbQuery('🔄 Загрузите новое фото');
+    return ctx.scene.reenter();
+});
+changePhotoScene.action('cancel_photo', async (ctx) => {
+    await ctx.answerCbQuery('❌ Изменение фото отменено');
+    return ctx.scene.enter('main');
+});
+changePhotoScene.action('photo_help', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(`📸 *Как сделать хорошее фото для профиля:*
+
+1. Используйте нейтральный светлый фон
+2. Обеспечьте хорошее освещение (желательно естественное)
+3. Расположитесь на расстоянии 1-1.5 метра от камеры
+4. Держите камеру на уровне глаз
+5. Используйте таймер для стабильного снимка
+6. Убедитесь, что фото четкое и не размытое
+7. Проверьте, что лицо занимает около 60% кадра
+
+*Как обрезать фото:*
+• На iPhone: используйте встроенный редактор
+• На Android: используйте Google Фото
+• Онлайн: squoosh.app или photopea.com`, Object.assign({ parse_mode: 'Markdown' }, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить фото', 'retry_photo')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_main')]
+    ])));
+});
+changePhotoScene.action('size_help', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(`📏 *Как проверить размер фото:*
+
+1. На телефоне:
+• Откройте фото
+• В свойствах или информации найдите размеры
+• Убедитесь, что размер не менее ${MIN_SIZE}x${MIN_SIZE}
+
+2. Как увеличить размер:
+• Сделайте новое фото в высоком качестве
+• Используйте основную камеру, не фронтальную
+• Отключите компрессию в настройках камеры`, Object.assign({ parse_mode: 'Markdown' }, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить фото', 'retry_photo')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_main')]
+    ])));
+});
+changePhotoScene.action('crop_help', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(`✂️ *Как сделать фото квадратным:*
+
+1. На iPhone:
+• Откройте фото в приложении Фото
+• Нажмите Изменить
+• Выберите инструмент обрезки
+• Выберите квадратный формат
+
+2. На Android:
+• Откройте фото в Google Фото
+• Нажмите кнопку изменения
+• Выберите Обрезать
+• Выберите формат 1:1
+
+3. Онлайн-сервисы:
+• squoosh.app
+• photopea.com
+• canva.com`, Object.assign({ parse_mode: 'Markdown' }, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить фото', 'retry_photo')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_main')]
+    ])));
+});
+changePhotoScene.action('size_reduce_help', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply(`📉 *Как уменьшить размер фото:*
+
+1. На телефоне:
+• Используйте встроенный редактор
+• Выберите опцию "Изменить размер" или "Сжать"
+• Сохраните в среднем качестве
+
+2. Онлайн-сервисы:
+• squoosh.app (рекомендуется)
+• tinypng.com
+• compressjpeg.com
+
+3. Советы:
+• Уменьшите разрешение до 1500x1500
+• Используйте JPEG формат
+• Выберите качество 80-90%`, Object.assign({ parse_mode: 'Markdown' }, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить фото', 'retry_photo')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_main')]
+    ])));
+});
+changePhotoScene.action('back_to_main', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+changePhotoScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery('👈 Возвращаемся в главное меню');
+    return ctx.scene.enter('main');
+});
+// Обработка всех остальных типов сообщений
+changePhotoScene.on('message', async (ctx) => {
+    await ctx.reply('⚠️ Пожалуйста, отправьте фотографию или выберите действие из меню ниже:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❓ Помощь по загрузке', 'photo_help')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+    ]));
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/change_phone_scene.ts":
+/*!***********************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/change_phone_scene.ts ***!
+  \***********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   changePhoneScene: () => (/* binding */ changePhoneScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const changePhoneScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('change_phone_scene');
+// Вход в сцену
+changePhoneScene.enter(async (ctx) => {
+    const state = ctx.scene.state;
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId)) {
+            return ctx.reply('❌ Ошибка: не выбрана запись', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+                ]]));
+        }
+        // Сохраняем состояние до удаления ctx.scene.state
+        const recordId = state.recordId;
+        // Сохраняем состояние в сессии
+        ctx.session.changePhoneState = {
+            recordId,
+            phone: state.phone || ctx.session.phone,
+            password: state.password || ctx.session.password
+        };
+        await ctx.reply('Введите новый номер телефона клиента в формате 79XXXXXXXXX:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_phone_change')
+            ]]));
+    }
+    catch (error) {
+        console.error('Error in changePhoneScene enter:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+            ]]));
+    }
+});
+// Обработка введенного телефона
+changePhoneScene.on('text', async (ctx) => {
+    const state = ctx.session.changePhoneState;
+    try {
+        if (!state || !state.recordId || !state.phone || !state.password) {
+            return ctx.reply('❌ Ошибка: недостаточно данных. Попробуйте заново.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+                ]]));
+        }
+        const newPhone = ctx.message.text.trim();
+        // Проверяем формат телефона
+        if (!/^7\d{10}$/.test(newPhone)) {
+            return ctx.reply('❌ Неверный формат номера телефона. Введите номер в формате 79XXXXXXXXX:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_phone_change')
+                ]]));
+        }
+        const loadingMsg = await ctx.reply('🔄 Обновляем номер телефона...');
+        try {
+            // Сохраняем recordId перед обновлением
+            const recordId = state.recordId;
+            const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterRecord({
+                phone: state.phone,
+                password: state.password,
+                recordId: state.recordId,
+                updateData: {
+                    client: {
+                        phone: newPhone
+                    }
+                }
+            });
+            // Удаляем сообщение о загрузке
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('✅ Номер телефона успешно обновлен', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К записи', 'back_to_record')
+                ]]));
+            // Сохраняем обновленное состояние
+            ctx.session.changePhoneState = Object.assign(Object.assign({}, state), { newPhone });
+        }
+        catch (error) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('❌ ' + (error.message || 'Не удалось обновить номер телефона'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'cancel_phone_change')
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error handling phone number:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+            ]]));
+    }
+});
+// Отмена изменения телефона
+changePhoneScene.action('cancel_phone_change', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.changePhoneState) === null || _a === void 0 ? void 0 : _a.recordId;
+        // Очищаем состояние до перехода на другую сцену
+        delete ctx.session.changePhoneState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in cancel_phone_change:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Возврат к записи
+changePhoneScene.action('back_to_record', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.changePhoneState) === null || _a === void 0 ? void 0 : _a.recordId;
+        // Очищаем состояние до перехода на другую сцену
+        delete ctx.session.changePhoneState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in back_to_record:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (changePhoneScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/clientsManagementScene.ts":
+/*!***************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/clientsManagementScene.ts ***!
+  \***************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   clientsManagementScene: () => (/* binding */ clientsManagementScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const clientsManagementScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('clients_management_scene');
+// Вспомогательные функции для работы с датами
+const formatDate = (date, format = 'YYYY-MM-DD') => {
+    const pad = (n) => n.toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    return format
+        .replace('YYYY', year.toString())
+        .replace('MM', month)
+        .replace('DD', day);
+};
+const formatTime = (date) => {
+    const d = new Date(date);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+// Вход в сцену
+clientsManagementScene.enter(async (ctx) => {
+    var _a, _b;
+    try {
+        // Проверяем авторизацию
+        if (!ctx.session.phone || !ctx.session.password) {
+            await ctx.reply('⚠️ Необходимо авторизоваться для просмотра записей.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Войти в аккаунт', 'start_login')
+                ]]));
+            return;
+        }
+        const loadingMessage = await ctx.reply('🔄 Загружаем ваши записи...');
+        try {
+            // Получаем записи через Laravel Service
+            const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterRecords({
+                phone: ctx.session.phone,
+                password: ctx.session.password,
+                params: {
+                    start_date: formatDate(new Date()),
+                    end_date: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000))
+                }
+            });
+            // Удаляем сообщение о загрузке
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => { });
+            if (!(response === null || response === void 0 ? void 0 : response.success) || !((_a = response.data) === null || _a === void 0 ? void 0 : _a.length)) {
+                return await ctx.reply('📅 У вас нет предстоящих записей на ближайший месяц.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                        telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')
+                    ]]));
+            }
+            // Группируем записи по дням
+            const recordsByDate = response.data.reduce((acc, record) => {
+                const date = new Date(record.date);
+                const dateKey = formatDate(date, 'DD.MM.YYYY');
+                if (!acc[dateKey]) {
+                    acc[dateKey] = [];
+                }
+                acc[dateKey].push(record);
+                return acc;
+            }, {});
+            // Создаем структурированные кнопки
+            const buttons = [];
+            Object.entries(recordsByDate).forEach(([date, records]) => {
+                // Добавляем заголовок даты
+                buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`📅 ${date}`, 'noop')]);
+                // Добавляем записи за этот день
+                records.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    .forEach(record => {
+                    var _a, _b;
+                    const time = formatTime(record.date);
+                    const clientName = ((_a = record.client) === null || _a === void 0 ? void 0 : _a.name) || 'Клиент';
+                    const services = (_b = record.services) === null || _b === void 0 ? void 0 : _b.map(s => s.title).slice(0, 2).join(', ');
+                    const buttonText = `${time} | ${clientName}${services ? ` - ${services}` : ''}`;
+                    buttons.push([
+                        telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(buttonText.length > 60 ? buttonText.slice(0, 57) + '...' : buttonText, `record_${record.id}`)
+                    ]);
+                });
+            });
+            // Добавляем кнопку возврата в меню
+            buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')]);
+            await ctx.reply('Выберите запись для управления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+        catch (error) {
+            // Удаляем сообщение о загрузке
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id).catch(() => { });
+            console.error('Error loading records:', error);
+            let errorMessage = '❌ Произошла ошибка при загрузке записей.';
+            if (((_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.status) === 401) {
+                errorMessage = '🔒 Ошибка авторизации. Пожалуйста, войдите в систему заново.';
+                return ctx.scene.enter('login_wizard');
+            }
+            await ctx.reply(errorMessage, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error in clientsManagementScene:', error);
+        await ctx.reply('❌ Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')
+            ]]));
+    }
+});
+// Заглушка для кнопок-заголовков дат
+clientsManagementScene.action('noop', async (ctx) => {
+    await ctx.answerCbQuery('Это заголовок даты').catch(() => { });
+});
+// Обработка выбора конкретной записи
+clientsManagementScene.action(/^record_(\d+)$/, async (ctx) => {
+    var _a, _b, _c;
+    try {
+        const recordId = ctx.match[1];
+        // Сохраняем ID записи в сессии
+        ctx.scene.session.selectedRecordId = recordId;
+        // Получаем детали записи
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterRecordDetails({
+            phone: ctx.session.phone,
+            password: ctx.session.password,
+            recordId: recordId
+        });
+        if (!(response === null || response === void 0 ? void 0 : response.success)) {
+            throw new Error('Не удалось получить информацию о записи');
+        }
+        const record = response.data;
+        const date = new Date(record.date);
+        // Формируем детальную информацию о записи
+        const recordInfo = [
+            `📅 Дата: ${formatDate(date, 'DD.MM.YYYY')}`,
+            `🕒 Время: ${formatTime(record.date)}`,
+            `👤 Клиент: ${((_a = record.client) === null || _a === void 0 ? void 0 : _a.name) || 'Не указан'}`,
+            `📱 Телефон: ${((_b = record.client) === null || _b === void 0 ? void 0 : _b.phone) || 'Не указан'}`,
+            `💅 Услуги:\n${((_c = record.services) === null || _c === void 0 ? void 0 : _c.map(s => `• ${s.title}`).join('\n')) || 'Нет услуг'}`
+        ].join('\n');
+        const managementKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⏱ Изменить время', 'change_service_time'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Удалить услугу', 'delete_service_from_order'),
+            ],
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('➕ Добавить услугу', 'add_service_to_order'),
+            ],
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📞 Изменить телефон', 'change_phone_number'),
+            ],
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚫 Отменить запись', 'cancel_client_booking'),
+            ],
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К списку записей', 'back_to_records'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« В меню', 'mainmenu'),
+            ]
+        ]);
+        await ctx.editMessageText(recordInfo, managementKeyboard);
+    }
+    catch (error) {
+        console.error('Error in record selection:', error);
+        await ctx.answerCbQuery('❌ Ошибка при загрузке информации о записи').catch(() => { });
+        await ctx.reply('Не удалось загрузить информацию о записи. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+            ]]));
+    }
+});
+// Возврат к списку записей
+clientsManagementScene.action('back_to_records', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Очищаем выбранную запись
+    delete ctx.scene.session.selectedRecordId;
+    return ctx.scene.reenter();
+});
+// Обработчики действий с записью
+clientsManagementScene.action('change_service_time', async (ctx) => {
+    if (!ctx.scene.session.selectedRecordId) {
+        await ctx.answerCbQuery('❌ Ошибка: запись не выбрана');
+        return ctx.scene.reenter();
+    }
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_service_time_scene', {
+        recordId: ctx.scene.session.selectedRecordId,
+        phone: ctx.session.phone,
+        password: ctx.session.password
+    });
+});
+clientsManagementScene.action('delete_service_from_order', async (ctx) => {
+    if (!ctx.scene.session.selectedRecordId) {
+        await ctx.answerCbQuery('❌ Ошибка: запись не выбрана');
+        return ctx.scene.reenter();
+    }
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('delete_service_scene', {
+        recordId: ctx.scene.session.selectedRecordId,
+        phone: ctx.session.phone,
+        password: ctx.session.password
+    });
+});
+clientsManagementScene.action('add_service_to_order', async (ctx) => {
+    if (!ctx.scene.session.selectedRecordId) {
+        await ctx.answerCbQuery('❌ Ошибка: запись не выбрана');
+        return ctx.scene.reenter();
+    }
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('add_service_scene', {
+        recordId: ctx.scene.session.selectedRecordId,
+        phone: ctx.session.phone,
+        password: ctx.session.password
+    });
+});
+clientsManagementScene.action('change_phone_number', async (ctx) => {
+    if (!ctx.scene.session.selectedRecordId) {
+        await ctx.answerCbQuery('❌ Ошибка: запись не выбрана');
+        return ctx.scene.reenter();
+    }
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_phone_scene', {
+        recordId: ctx.scene.session.selectedRecordId,
+        phone: ctx.session.phone,
+        password: ctx.session.password
+    });
+});
+clientsManagementScene.action('cancel_client_booking', async (ctx) => {
+    if (!ctx.scene.session.selectedRecordId) {
+        await ctx.answerCbQuery('❌ Ошибка: запись не выбрана');
+        return ctx.scene.reenter();
+    }
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('cancel_booking_scene', {
+        recordId: ctx.scene.session.selectedRecordId,
+        phone: ctx.session.phone,
+        password: ctx.session.password
+    });
+});
+// Возврат в главное меню
+clientsManagementScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Очищаем данные сцены
+    delete ctx.scene.session.selectedRecordId;
+    return ctx.scene.enter('main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (clientsManagementScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/delete_service_scene.ts":
+/*!*************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/delete_service_scene.ts ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   deleteServiceScene: () => (/* binding */ deleteServiceScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const deleteServiceScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('delete_service_scene');
+// Вход в сцену
+deleteServiceScene.enter(async (ctx) => {
+    var _a, _b;
+    const state = ctx.scene.state;
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId)) {
+            return ctx.reply('❌ Ошибка: не выбрана запись', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
+                ]]));
+        }
+        // Сохраняем состояние
+        ctx.session.deleteServiceState = {
+            recordId: state.recordId,
+            phone: state.phone || ctx.session.phone,
+            password: state.password || ctx.session.password
+        };
+        // Получаем детали записи для отображения списка услуг
+        const record = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterRecordDetails({
+            phone: ctx.session.deleteServiceState.phone,
+            password: ctx.session.deleteServiceState.password,
+            recordId: state.recordId
+        });
+        if (!(record === null || record === void 0 ? void 0 : record.success) || !((_b = (_a = record.data) === null || _a === void 0 ? void 0 : _a.services) === null || _b === void 0 ? void 0 : _b.length)) {
+            return ctx.reply('❌ В записи нет услуг для удаления', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
+                ]]));
+        }
+        // Создаем кнопки с услугами
+        const buttons = record.data.services.map(service => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${service.title} (${service.cost}₽)`, `delete_service_${service.id}`)
+        ]));
+        // Добавляем кнопку отмены
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_service_delete')
+        ]);
+        await ctx.reply('Выберите услугу для удаления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    }
+    catch (error) {
+        console.error('Error in deleteServiceScene enter:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
+            ]]));
+    }
+});
+// Обработка выбора услуги
+deleteServiceScene.action(/^delete_service_(\d+)$/, async (ctx) => {
+    const state = ctx.session.deleteServiceState;
+    const serviceId = ctx.match[1];
+    try {
+        if (!(state === null || state === void 0 ? void 0 : state.recordId) || !state.phone || !state.password) {
+            throw new Error('Отсутствуют необходимые данные');
+        }
+        await ctx.answerCbQuery();
+        const loadingMsg = await ctx.reply('🔄 Удаляем услугу...');
+        try {
+            const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterRecord({
+                phone: state.phone,
+                password: state.password,
+                recordId: state.recordId,
+                updateData: {
+                    services: {
+                        remove: [parseInt(serviceId)]
+                    }
+                }
+            });
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('✅ Услуга успешно удалена', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К записи', 'back_to_record')
+                ]]));
+        }
+        catch (error) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMsg.message_id).catch(() => { });
+            await ctx.reply('❌ ' + (error.message || 'Не удалось удалить услугу'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'cancel_service_delete')
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error in service deletion:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработка отмены
+deleteServiceScene.action('cancel_service_delete', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.deleteServiceState) === null || _a === void 0 ? void 0 : _a.recordId;
+        // Очищаем состояние
+        delete ctx.session.deleteServiceState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in cancel_service_delete:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Возврат к записи
+deleteServiceScene.action('back_to_record', async (ctx) => {
+    var _a;
+    try {
+        await ctx.answerCbQuery();
+        const recordId = (_a = ctx.session.deleteServiceState) === null || _a === void 0 ? void 0 : _a.recordId;
+        // Очищаем состояние
+        delete ctx.session.deleteServiceState;
+        return ctx.scene.enter('clients_management_scene', {
+            action: 'show_record',
+            recordId
+        });
+    }
+    catch (error) {
+        console.error('Error in back_to_record:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (deleteServiceScene);
+
+
+/***/ }),
+
 /***/ "./src/telegraf/services/bot-master/scenes/loginWizard.ts":
 /*!****************************************************************!*\
   !*** ./src/telegraf/services/bot-master/scenes/loginWizard.ts ***!
@@ -1940,14 +3739,6 @@ handlePasswordInput.action('back_to_phone', async (ctx) => {
     await ctx.editMessageText(message, keyboard);
     return ctx.wizard.back();
 });
-handlePasswordInput.action('back_to_menu', async (ctx) => {
-    await ctx.answerCbQuery();
-    // Очищаем данные сессии
-    if (ctx.session) {
-        ctx.session = {};
-    }
-    return ctx.scene.enter('login_wizard'); // Возвращаемся в начало сцены
-});
 // Утилита для задержки
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 handlePasswordInput.on('text', async (ctx) => {
@@ -1958,16 +3749,15 @@ handlePasswordInput.on('text', async (ctx) => {
         await ctx.reply('⏳ Проверяем данные...');
         const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].auth(phone, password, ctx.from.id);
         if (response === null || response === void 0 ? void 0 : response.success) {
-            // Сохраняем данные авторизации в сессию
-            ctx.session.phone = phone;
-            ctx.session.password = password;
-            // Также можно сохранить токен, если он нужен
-            if (response.token) {
-                ctx.session.apiToken = response.token;
-            }
-            // Сохраняем данные пользователя
-            if (response.user) {
-                ctx.session.user = response.user;
+            if (ctx.session) {
+                // Инициализируем сессию с правильной структурой
+                const sessionData = {
+                    phone,
+                    password,
+                    apiToken: response.token,
+                    user: response.user
+                };
+                Object.assign(ctx.session, sessionData);
             }
             try {
                 const messagesToDelete = ctx.message.message_id;
@@ -2037,10 +3827,38 @@ handlePasswordInput.action('retry_auth', async (ctx) => {
     await ctx.editMessageText(message, keyboard);
     return ctx.wizard.selectStep(2); // Возврат к вводу телефона
 });
+const getInitialSession = () => ({
+    user: { token: undefined, data: undefined },
+    notifications: [],
+    notificationForm: {
+        name: '',
+        dateTime: ''
+    },
+    notificationId: '',
+    searchRequestsType: '',
+    autobookingForm: {
+        warehouseId: '',
+        coefficient: '',
+        checkUntilDate: '',
+        boxTypeId: ''
+    },
+    page: 1,
+    selectedTariff: '',
+    count: null,
+    userPreferences: { notifications: 0 },
+    mySessionProp: 0,
+    searchRequestsPage: 0,
+    phone: '',
+    password: '',
+    isEditing: false
+});
 handlePasswordInput.action('back_to_menu', async (ctx) => {
     await ctx.answerCbQuery();
+    if (ctx.session) {
+        Object.assign(ctx.session, getInitialSession());
+    }
     if (ctx.scene.session) {
-        ctx.scene.session = {};
+        Object.assign(ctx.scene.session, {});
     }
     return ctx.scene.enter('login_wizard');
 });
@@ -2239,27 +4057,8 @@ mainScene.action('documents', async (ctx) => {
     await ctx.editMessageText(message, documentsKeyboard);
 });
 mainScene.action('clients_management', async (ctx) => {
-    const message = `[работа с клиентами]`;
-    const clientsManagementKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить время услуги', 'change_service_time'),
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('удалить услугу из заказа', 'delete_service_from_order'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('добавить услугу в заказ', 'add_service_to_order'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить номер телефона', 'change_phone_number'),
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить состав заказа', 'change_order_content'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('отменить запись клиента', 'cancel_client_booking'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu'),
-        ]
-    ]);
-    await ctx.editMessageText(message, clientsManagementKeyboard);
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('clients_management_scene');
 });
 mainScene.action('change_description', async (ctx) => {
     await ctx.answerCbQuery();
@@ -2267,10 +4066,12 @@ mainScene.action('change_description', async (ctx) => {
     return ctx.scene.enter('change_description_scene');
 });
 mainScene.action('change_photo', async (ctx) => {
-    ctx.reply('Изменить фотографию');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_photo_scene');
 });
 mainScene.action('change_schedule', async (ctx) => {
-    ctx.reply('Изменить график работы');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('schedule_management');
 });
 
 
@@ -2377,6 +4178,10 @@ const ValidationMessages = {
     MED_BOOK_EXPIRY: {
         prompt: 'Дата окончания действия медицинской книжки\n\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025',
         error: 'Неверный формат даты.\n\nВведите дату окончания медицинской книжки\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025'
+    },
+    MASTER_PRICE: {
+        prompt: '📝 Укажите процент ставки, согласованный с управляющим\n\n⚠️ Максимальная ставка 50%\n\nВведите число от 1 до 50',
+        error: '❌ Некорректный процент ставки\n\nПожалуйста, введите число от 1 до 50'
     }
 };
 // Validation helper functions
@@ -2423,10 +4228,11 @@ const showWelcome = async (ctx) => {
         medBookExpiry: '',
         hasEducationCert: false,
         educationCertPhoto: '',
-        isSelfEmployed: false
+        isSelfEmployed: false,
+        masterPrice: 0 // Ставим начальное значение вместо undefined
     };
     ctx.scene.session.registrationForm = registrationForm;
-    const messageText = 'Давайте вместе устроимся на работу?!!!';
+    const messageText = 'Давайте вместе устроимся на работу!';
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Давайте', 'start_registration')]
     ]);
@@ -2439,17 +4245,26 @@ const showWelcome = async (ctx) => {
     return ctx.wizard.next();
 };
 // Check self-employment status
+// Type guard для проверки типа callback query
+function isDataCallbackQuery(query) {
+    return 'data' in query;
+}
 const checkSelfEmployment = async (ctx) => {
-    var _a;
-    if (((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.data) === 'start_registration') {
-        const messageText = 'Вы являетесь самозанятым?';
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [
-                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Да', 'self_employed_yes'),
-                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Нет', 'self_employed_no')
-            ]
-        ]);
-        await ctx.editMessageText(messageText, keyboard);
+    // Проверяем наличие callback query и его тип
+    if (ctx.callbackQuery && isDataCallbackQuery(ctx.callbackQuery)) {
+        // Теперь TypeScript знает, что data существует
+        if (ctx.callbackQuery.data === 'start_registration') {
+            const messageText = 'Вы являетесь самозанятым?';
+            const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Да', 'self_employed_yes'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Нет', 'self_employed_no')
+                ]
+            ]);
+            await ctx.editMessageText(messageText, keyboard);
+            // Отвечаем на callback query чтобы убрать "часики"
+            await ctx.answerCbQuery();
+        }
     }
     return ctx.wizard.next();
 };
@@ -2719,19 +4534,66 @@ const handleEducationCertQuestion = async (ctx) => {
 const handleEducationCert = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleEducationCert.action('education_cert_yes', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = true;
-    await ctx.reply('Отправьте пожалуйста фото сертификата');
+    await ctx.reply('Отправьте, пожалуйста, фото сертификата');
     return ctx.wizard.next();
 });
 handleEducationCert.action('education_cert_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = false;
-    return handleFinalStep(ctx);
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    // Пропускаем шаг handleEducationCertPhoto
+    ctx.wizard.selectStep(ctx.wizard.cursor + 2);
+    return;
 });
 // Handle education certificate photo
 const handleEducationCertPhoto = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleEducationCertPhoto.on('photo', async (ctx) => {
+    // Сначала показываем, что фото получено
+    await ctx.reply('✅ Фото сертификата получено');
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
     ctx.scene.session.registrationForm.educationCertPhoto = photo.file_id;
-    return handleFinalStep(ctx);
+    // Делаем небольшую паузу перед следующим шагом
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Запрашиваем ставку
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    return ctx.wizard.next();
+});
+// Добавляем обработку пропуска фото для тех, у кого нет сертификата
+handleEducationCertPhoto.action('skip_photo', async (ctx) => {
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    return ctx.wizard.next();
+});
+const handleMasterPrice = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
+// Регистрируем обработчик текстовых сообщений
+handleMasterPrice.on('text', async (ctx) => {
+    const price = parseInt(ctx.message.text);
+    console.log('Received master price:', price);
+    // Проверяем, является ли введенное значение числом
+    if (isNaN(price)) {
+        await ctx.reply(ValidationMessages.MASTER_PRICE.error);
+        return;
+    }
+    // Проверяем диапазон
+    if (price <= 0 || price > 50) {
+        await ctx.reply(ValidationMessages.MASTER_PRICE.error);
+        return;
+    }
+    try {
+        ctx.scene.session.registrationForm.masterPrice = price;
+        console.log('Saved master price:', ctx.scene.session.registrationForm);
+        // Показываем подтверждение
+        await ctx.reply(`✅ Установлена ставка: ${price}%\n\nПереходим к подготовке документов...`);
+        // Переходим к финальному шагу
+        await handleFinalStep(ctx);
+    }
+    catch (error) {
+        console.error('Error in handleMasterPrice:', error);
+        await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте ввести ставку снова.');
+    }
+});
+// Обрабатываем другие типы сообщений
+handleMasterPrice.on('message', async (ctx) => {
+    console.log('Received non-text message in master price handler');
+    await ctx.reply(ValidationMessages.MASTER_PRICE.error);
 });
 // Создаем улучшенное хранилище для групп документов
 const documentGroups = new Map();
@@ -2741,7 +4603,11 @@ function logDebug(message, data) {
 }
 const handleSignedDocuments = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
 handleSignedDocuments.on('document', async (ctx) => {
-    var _a;
+    var _a, _b, _c, _d;
+    console.log('DEBUG: Document handler triggered', {
+        sessionData: (_a = ctx.scene) === null || _a === void 0 ? void 0 : _a.session,
+        registrationId: (_c = (_b = ctx.scene) === null || _b === void 0 ? void 0 : _b.session) === null || _c === void 0 ? void 0 : _c.registrationId
+    });
     const message = ctx.message;
     const mediaGroupId = message.media_group_id;
     const document = message.document;
@@ -2753,7 +4619,7 @@ handleSignedDocuments.on('document', async (ctx) => {
         registrationId: ctx.scene.session.registrationId
     });
     // Проверяем формат файла
-    const fileName = (_a = document.file_name) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+    const fileName = (_d = document.file_name) === null || _d === void 0 ? void 0 : _d.toLowerCase();
     if (!(fileName === null || fileName === void 0 ? void 0 : fileName.endsWith('.pdf')) && !(fileName === null || fileName === void 0 ? void 0 : fileName.endsWith('.docx'))) {
         logDebug('Некорректный формат файла:', { fileName });
         await ctx.reply('Пожалуйста, отправляйте документы только в форматах PDF или DOCX');
@@ -2863,10 +4729,13 @@ const handleFinalStep = async (ctx) => {
     var _a;
     await ctx.reply('Отлично, мы подготовим документы и отправим вам их сюда.');
     try {
-        console.log('Attempting to submit registration with data:', ctx.scene.session.registrationForm);
+        console.log('Attempting to submit registration with data:', Object.assign(Object.assign({}, ctx.scene.session.registrationForm), { masterPrice: ctx.scene.session.registrationForm.masterPrice }));
         const registrationResponse = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].submitRegistration(ctx.scene.session.registrationForm);
         console.log('Registration submitted successfully:', registrationResponse);
         const registrationId = registrationResponse.data.id;
+        // Явно сохраняем registrationId в сессии
+        ctx.scene.session.registrationId = registrationId;
+        console.log('DEBUG: Registration ID saved to session:', registrationId);
         ctx.scene.session.documentUpload = {
             documents: [],
             registrationId: registrationId
@@ -2927,8 +4796,423 @@ const handleFinalStep = async (ctx) => {
         await ctx.reply(errorMessage);
     }
 };
-// Create and export the wizard scene
-const registrationWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('registration_wizard', showWelcome, checkSelfEmployment, handleSelfEmployment, handleFullName, handleBirthDate, handlePassport, handleIssuedBy, handleIssueDate, handleDivisionCode, handleAddress, handleInn, handleAccountNumber, handleBankName, handleBik, handleCorrAccount, handleBankInn, handleBankKpp, handlePhone, handleEmail, handleMedBook, handleMedBookExpiry, handleEducationCert, handleEducationCertPhoto, handleSignedDocuments);
+const registrationWizard = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('registration_wizard', showWelcome, checkSelfEmployment, handleSelfEmployment, handleFullName, handleBirthDate, handlePassport, handleIssuedBy, handleIssueDate, handleDivisionCode, handleAddress, handleInn, handleAccountNumber, handleBankName, handleBik, handleCorrAccount, handleBankInn, handleBankKpp, handlePhone, handleEmail, handleMedBook, handleMedBookExpiry, handleEducationCert, handleEducationCertPhoto, handleMasterPrice, // Новый шаг
+handleFinalStep, 
+// Исправляем этап ожидания документов
+async (ctx) => {
+    // Явно возвращаем Promise<void>
+    await ctx.reply('Ожидаю подписанные документы...');
+    return;
+});
+registrationWizard.action('cancel', async (ctx) => {
+    await ctx.reply('❌ Регистрация отменена\n\n' +
+        'Вы можете начать заново, когда будете готовы', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Начать заново', 'start_registration')
+        ]]));
+    return ctx.scene.leave();
+});
+// Добавляем обработчик документов через middleware
+registrationWizard.command('restart', async (ctx) => {
+    await ctx.scene.leave();
+    await ctx.scene.enter('registration_wizard');
+});
+// Регистрируем обработчик документов на уровне сцены
+registrationWizard.on('document', handleSignedDocuments);
+// Добавляем отладочный middleware
+registrationWizard.use(async (ctx, next) => {
+    var _a, _b;
+    console.log('Scene middleware triggered:', {
+        step: (_a = ctx.wizard) === null || _a === void 0 ? void 0 : _a.cursor,
+        sessionData: (_b = ctx.scene) === null || _b === void 0 ? void 0 : _b.session,
+        updateType: ctx.updateType
+    });
+    return next();
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-master/scenes/scheduleManagementScene.ts":
+/*!****************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/scheduleManagementScene.ts ***!
+  \****************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   scheduleManagementScene: () => (/* binding */ scheduleManagementScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const scheduleManagementScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('schedule_management');
+// Форматирование даты для API
+const formatDateForApi = (date) => {
+    const [day, month, year] = date.split('.');
+    return `${year}-${month}-${day}`;
+};
+// Форматирование даты для отображения
+const formatDateForDisplay = (date) => {
+    const [year, month, day] = date.split('-');
+    const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+    const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    return `${day}.${month} (${days[dateObj.getDay()]})`;
+};
+// Проверка формата даты
+const isValidDateFormat = (date) => {
+    const dateRegex = /^\d{2}\.\d{2}\.\d{4}$/;
+    return dateRegex.test(date);
+};
+// Проверка корректности даты
+const isValidDate = (dateStr) => {
+    if (!isValidDateFormat(dateStr))
+        return false;
+    const [day, month, year] = dateStr.split('.').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.getDate() === day &&
+        date.getMonth() === month - 1 &&
+        date.getFullYear() === year;
+};
+// Проверка что дата не в прошлом
+const isDateInFuture = (dateStr) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const [day, month, year] = dateStr.split('.').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date >= today;
+};
+// Вход в сцену
+scheduleManagementScene.enter(async (ctx) => {
+    try {
+        ctx.session.scheduleState = {
+            step: 'select_period'
+        };
+        await ctx.reply('Для изменения графика работы сначала выберите период:\n\n' +
+            '⚠️ Убедитесь, что замена согласована с заменяющим мастером.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Один день', 'period_single')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Период дат', 'period_range')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        console.error('Error in scheduleManagementScene.enter:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработка выбора периода
+scheduleManagementScene.action(/^period_(single|range)$/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        const periodType = ctx.match[1];
+        ctx.session.scheduleState = {
+            step: 'enter_date',
+            periodType
+        };
+        if (periodType === 'single') {
+            await ctx.editMessageText('Введите дату для замены в формате ДД.ММ.ГГГГ (например, 25.03.2024):', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+        }
+        else {
+            await ctx.editMessageText('Введите начальную дату периода в формате ДД.ММ.ГГГГ:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+        }
+    }
+    catch (error) {
+        console.error('Error in period selection:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработка ввода даты/дат
+scheduleManagementScene.on('text', async (ctx) => {
+    try {
+        if (!ctx.session.scheduleState)
+            return;
+        const state = ctx.session.scheduleState;
+        const text = ctx.message.text;
+        if (state.step === 'enter_date') {
+            if (!isValidDate(text)) {
+                await ctx.reply('Неверный формат даты. Пожалуйста, используйте формат ДД.ММ.ГГГГ:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+                return;
+            }
+            if (!isDateInFuture(text)) {
+                await ctx.reply('Нельзя выбрать дату в прошлом. Пожалуйста, введите будущую дату:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+                return;
+            }
+            if (state.periodType === 'single') {
+                state.startDate = formatDateForApi(text);
+                state.endDate = state.startDate;
+                await showMastersList(ctx);
+            }
+            else {
+                if (!state.startDate) {
+                    state.startDate = formatDateForApi(text);
+                    await ctx.reply('Теперь введите конечную дату периода в формате ДД.ММ.ГГГГ:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+                }
+                else {
+                    const endDate = formatDateForApi(text);
+                    if (endDate < state.startDate) {
+                        await ctx.reply('Конечная дата не может быть раньше начальной. Введите конечную дату снова:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]]));
+                        return;
+                    }
+                    state.endDate = endDate;
+                    await showMastersList(ctx);
+                }
+            }
+        }
+    }
+    catch (error) {
+        console.error('Error in text handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+async function showMastersList(ctx) {
+    var _a, _b, _c;
+    try {
+        if (!((_a = ctx.session.scheduleState) === null || _a === void 0 ? void 0 : _a.startDate) || !((_b = ctx.session.scheduleState) === null || _b === void 0 ? void 0 : _b.endDate)) {
+            await ctx.reply('Ошибка: не выбраны даты');
+            return;
+        }
+        // Показываем начало загрузки
+        const loadingMessage = await ctx.reply('⌛ Подбираем доступных мастеров...', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Отменить', 'back_to_period')
+            ]]));
+        // Получаем данные текущего мастера
+        const masterInfo = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getStaffSchedule(ctx.from.id, ctx.session.scheduleState.startDate, ctx.session.scheduleState.endDate, true);
+        if (!((_c = masterInfo === null || masterInfo === void 0 ? void 0 : masterInfo.data) === null || _c === void 0 ? void 0 : _c[0])) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id);
+            await ctx.reply('Не удалось получить информацию о мастере');
+            return;
+        }
+        // Получаем список мастеров филиала
+        const allMastersResponse = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getFilialStaff(ctx.from.id, ctx.session.scheduleState.startDate, ctx.session.scheduleState.endDate, true);
+        // Удаляем сообщение о загрузке
+        await ctx.telegram.deleteMessage(ctx.chat.id, loadingMessage.message_id);
+        if (!(allMastersResponse === null || allMastersResponse === void 0 ? void 0 : allMastersResponse.success) || !allMastersResponse.data) {
+            await ctx.reply('Не удалось получить список мастеров', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+                ]]));
+            return;
+        }
+        const currentMasterId = masterInfo.data[0].staff_id;
+        // Фильтруем список - исключаем текущего мастера
+        const availableMasters = allMastersResponse.data.filter(master => master.id !== currentMasterId);
+        if (!availableMasters.length) {
+            await ctx.reply('Нет доступных мастеров для замены в филиале');
+            return;
+        }
+        // Создаем кнопки выбора мастеров
+        const buttons = availableMasters.map(master => {
+            const buttonText = master.name
+                ? `${master.name}${master.specialization ? ` (${master.specialization})` : ''}`
+                : `Мастер ${master.id}`;
+            return [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(buttonText, `select_master_${master.id}`)
+            ];
+        });
+        buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')]);
+        const dateRange = ctx.session.scheduleState.periodType === 'single'
+            ? formatDateForDisplay(ctx.session.scheduleState.startDate)
+            : `${formatDateForDisplay(ctx.session.scheduleState.startDate)} - ${formatDateForDisplay(ctx.session.scheduleState.endDate)}`;
+        ctx.session.scheduleState = Object.assign(Object.assign({}, ctx.session.scheduleState), { step: 'select_master', masters: availableMasters, currentMasterId: currentMasterId });
+        await ctx.reply(`Выберите мастера для замены на ${dateRange}:`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    }
+    catch (error) {
+        console.error('Error in showMastersList:', error);
+        await ctx.reply('😕 Что-то пошло не так, попробуйте еще раз', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+            ]]));
+    }
+}
+// Обработка выбора мастера
+scheduleManagementScene.action(/^select_master_(\d+)$/, async (ctx) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    try {
+        await ctx.answerCbQuery();
+        if (!((_a = ctx.session.scheduleState) === null || _a === void 0 ? void 0 : _a.startDate) ||
+            !((_b = ctx.session.scheduleState) === null || _b === void 0 ? void 0 : _b.endDate) ||
+            !((_c = ctx.session.scheduleState) === null || _c === void 0 ? void 0 : _c.currentMasterId)) {
+            await ctx.reply('Ошибка: недостаточно данных для замены');
+            return;
+        }
+        const replacementMasterId = parseInt(ctx.match[1]);
+        const currentMasterId = ctx.session.scheduleState.currentMasterId;
+        // Показываем начало процесса
+        await ctx.editMessageText('⌛ Подготавливаем данные для замены...', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Отменить', 'back_to_period')
+            ]]));
+        // Получаем расписание текущего мастера для текущего дня
+        const currentMasterSchedule = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getStaffSchedule(ctx.from.id, ctx.session.scheduleState.startDate, ctx.session.scheduleState.startDate, true);
+        let masterScheduleData = null;
+        if (currentMasterSchedule === null || currentMasterSchedule === void 0 ? void 0 : currentMasterSchedule.data) {
+            masterScheduleData = currentMasterSchedule.data.find(schedule => schedule.staff_id === currentMasterId);
+        }
+        // Проверяем существование slots
+        if (!(masterScheduleData === null || masterScheduleData === void 0 ? void 0 : masterScheduleData.slots) || !Array.isArray(masterScheduleData.slots) || masterScheduleData.slots.length === 0) {
+            await ctx.editMessageText('🤔 Не нашли график работы на выбранную дату', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+                ]]));
+            return;
+        }
+        // Готовим данные для обновления
+        const scheduleData = {
+            schedules_to_set: [],
+            schedules_to_delete: []
+        };
+        // Создаем массив всех дат диапазона
+        const start = new Date(ctx.session.scheduleState.startDate);
+        const end = new Date(ctx.session.scheduleState.endDate);
+        // Обновляем статус для периода дат
+        if (start.getTime() !== end.getTime()) {
+            await ctx.editMessageText('⌛ Проверяем графики за выбранный период...', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Отменить', 'back_to_period')
+                ]]));
+        }
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const date = d.toISOString().split('T')[0];
+            const daySchedule = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getStaffSchedule(ctx.from.id, date, date, true);
+            const masterDaySchedule = (_d = daySchedule === null || daySchedule === void 0 ? void 0 : daySchedule.data) === null || _d === void 0 ? void 0 : _d.find(schedule => schedule.staff_id === currentMasterId);
+            if ((_e = masterDaySchedule === null || masterDaySchedule === void 0 ? void 0 : masterDaySchedule.slots) === null || _e === void 0 ? void 0 : _e.length) {
+                scheduleData.schedules_to_set.push({
+                    staff_id: replacementMasterId,
+                    date,
+                    slots: masterDaySchedule.slots
+                });
+                scheduleData.schedules_to_delete.push({
+                    staff_id: currentMasterId,
+                    date
+                });
+            }
+        }
+        // Проверяем наличие слотов в готовых данных
+        if (!((_g = (_f = scheduleData.schedules_to_set[0]) === null || _f === void 0 ? void 0 : _f.slots) === null || _g === void 0 ? void 0 : _g.length)) {
+            await ctx.editMessageText('😕 Не нашли рабочих смен в выбранные дни', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+                ]]));
+            return;
+        }
+        const selectedMaster = (_h = ctx.session.scheduleState.masters) === null || _h === void 0 ? void 0 : _h.find(m => m.id === replacementMasterId);
+        if (!(selectedMaster === null || selectedMaster === void 0 ? void 0 : selectedMaster.name)) {
+            await ctx.editMessageText('😕 Не удалось найти информацию о выбранном мастере', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+                ]]));
+            return;
+        }
+        const dateRange = ctx.session.scheduleState.periodType === 'single'
+            ? formatDateForDisplay(ctx.session.scheduleState.startDate)
+            : `${formatDateForDisplay(ctx.session.scheduleState.startDate)} - ${formatDateForDisplay(ctx.session.scheduleState.endDate)}`;
+        ctx.session.scheduleState = Object.assign(Object.assign({}, ctx.session.scheduleState), { updateData: scheduleData });
+        await ctx.editMessageText(`📋 Подтвердите замену:\n\n` +
+            `🗓 Период: ${dateRange}\n` +
+            `👤 Заменяющий мастер: ${selectedMaster.name}\n\n` +
+            `⚠️ Вы действительно хотите передать свой график работы этому мастеру?`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Да, подтверждаю', `confirm_replacement_${replacementMasterId}`)],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'back_to_period')]
+        ]));
+    }
+    catch (error) {
+        console.error('Error in master selection:', error);
+        await ctx.editMessageText('😕 Что-то пошло не так\n' +
+            'Попробуйте выбрать другой период или мастера', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+            ]]));
+    }
+});
+// Обработчик подтверждения замены
+scheduleManagementScene.action(/^confirm_replacement_(\d+)$/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        const scheduleState = ctx.session.scheduleState;
+        if (!(scheduleState === null || scheduleState === void 0 ? void 0 : scheduleState.updateData)) {
+            await ctx.editMessageText('😕 Что-то пошло не так, попробуйте начать сначала', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_period')
+                ]]));
+            return;
+        }
+        // Показываем статус обновления
+        await ctx.editMessageText('⌛ Обновляем график работы...', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Отменить', 'back_to_period')
+            ]]));
+        // Форматируем данные для API
+        const formattedData = {
+            schedules_to_set: scheduleState.updateData.schedules_to_set.map(schedule => {
+                if ('dates' in schedule) {
+                    const dates = schedule.dates;
+                    return {
+                        staff_id: schedule.staff_id,
+                        date: dates[0].date,
+                        slots: dates[0].slots
+                    };
+                }
+                return schedule;
+            }),
+            schedules_to_delete: scheduleState.updateData.schedules_to_delete.map(schedule => {
+                if ('dates' in schedule) {
+                    const dates = schedule.dates;
+                    return {
+                        staff_id: schedule.staff_id,
+                        date: dates[0]
+                    };
+                }
+                return schedule;
+            })
+        };
+        // Отправляем запрос на обновление
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateStaffSchedule(ctx.from.id, scheduleState.startDate, formattedData, true);
+        if (result === null || result === void 0 ? void 0 : result.success) {
+            const dateRange = ctx.session.scheduleState.periodType === 'single'
+                ? formatDateForDisplay(ctx.session.scheduleState.startDate)
+                : `${formatDateForDisplay(ctx.session.scheduleState.startDate)} - ${formatDateForDisplay(ctx.session.scheduleState.endDate)}`;
+            // Показываем успешное завершение
+            await ctx.editMessageText(`✨ Отлично! Замена оформлена\n\n` +
+                `🗓 Период: ${dateRange}\n\n` +
+                `График работы успешно передан заменяющему мастеру`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'mainmenu')
+                ]]));
+        }
+        else {
+            throw new Error('Failed to update schedule');
+        }
+    }
+    catch (error) {
+        console.error('Error in replacement confirmation:', error);
+        await ctx.editMessageText('😕 Не удалось обновить график\n' +
+            'Возможно, выбранный мастер уже работает в это время', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Попробовать снова', 'back_to_period')
+            ]]));
+    }
+});
+// Обработка кнопки "Назад"
+scheduleManagementScene.action('back_to_period', async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        ctx.session.scheduleState = {
+            step: 'select_period'
+        };
+        await ctx.editMessageText('Для изменения графика работы сначала выберите период:\n\n' +
+            '⚠️ Убедитесь, что замена согласована с заменяющим мастером.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Один день', 'period_single')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Период дат', 'period_range')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        console.error('Error in back_to_period:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Возврат в главное меню
+scheduleManagementScene.action('mainmenu', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('🏠 Главное меню');
+        return ctx.scene.enter('main');
+    }
+    catch (error) {
+        console.error('Error in mainmenu:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (scheduleManagementScene);
 
 
 /***/ }),
@@ -3046,81 +5330,6 @@ employmentScene.action('viewApplications', async (ctx) => {
 });
 employmentScene.action('employment', async (ctx) => {
     await (0,_employmentActions__WEBPACK_IMPORTED_MODULE_1__.showEmployment)(ctx);
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/mainScene.ts":
-/*!***************************************************!*\
-  !*** ./src/telegraf/services/scenes/mainScene.ts ***!
-  \***************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   mainScene: () => (/* binding */ mainScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _utils_cabinetGate__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../utils/cabinetGate */ "./src/telegraf/utils/cabinetGate.ts");
-
-
-const mainScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('main');
-// Define the enter handler
-mainScene.enter(async (ctx) => {
-    const messageText = `главный экран для управляющего`;
-    const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('задачи', 'tasks')
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('расчет зп', 'salary'),
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('уведомления', 'notifications'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('трудоустройство', 'employment'),
-        ],
-        [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('управление складом', 'warehouse'),
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('управление персоналом', 'staff'),
-        ]
-    ]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, mainMenuKeyboard);
-        }
-        catch (error) {
-            await ctx.reply(messageText, mainMenuKeyboard);
-        }
-    }
-    else {
-        // Otherwise, send a new message
-        await ctx.reply(messageText, mainMenuKeyboard);
-    }
-});
-// Handle 'autobooking' action
-mainScene.action('tasks', async (ctx) => {
-    await ctx.scene.enter('tasks');
-});
-mainScene.action('salary', async (ctx) => {
-    await ctx.scene.enter('salary');
-});
-mainScene.action('notifications', async (ctx) => {
-    await (0,_utils_cabinetGate__WEBPACK_IMPORTED_MODULE_1__.cabinetGate)(ctx, 'notifications');
-});
-mainScene.action('employment', async (ctx) => {
-    await ctx.scene.enter('employment');
-});
-mainScene.action('warehouse', async (ctx) => {
-    await ctx.scene.enter('warehouse');
-});
-mainScene.action('staff', async (ctx) => {
-    await ctx.scene.enter('staff');
-});
-mainScene.action('cabinets', async (ctx) => {
-    await (0,_utils_cabinetGate__WEBPACK_IMPORTED_MODULE_1__.cabinetGate)(ctx, 'showCabinetsScene');
 });
 
 
@@ -5502,6 +7711,16 @@ module.exports = require("express");
 
 /***/ }),
 
+/***/ "form-data":
+/*!****************************!*\
+  !*** external "form-data" ***!
+  \****************************/
+/***/ ((module) => {
+
+module.exports = require("form-data");
+
+/***/ }),
+
 /***/ "openai":
 /*!*************************!*\
   !*** external "openai" ***!
@@ -5579,6 +7798,16 @@ module.exports = require("winston");
 /***/ ((module) => {
 
 module.exports = require("fs");
+
+/***/ }),
+
+/***/ "node:fs":
+/*!**************************!*\
+  !*** external "node:fs" ***!
+  \**************************/
+/***/ ((module) => {
+
+module.exports = require("node:fs");
 
 /***/ }),
 
@@ -5671,7 +7900,7 @@ module.exports = require("vm");
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
+// This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
 /*!**********************!*\
   !*** ./src/index.ts ***!

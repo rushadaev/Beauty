@@ -1,6 +1,7 @@
 import { Scenes, Markup, Composer } from 'telegraf';
 import { MyContext } from '../../../types/MyContext';
 import laravelService from "../../../../services/laravelService";
+import { CallbackQuery } from 'telegraf/types';
 
 // Session interface to store user data
 interface RegistrationSession {
@@ -25,6 +26,7 @@ interface RegistrationSession {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
+    masterPrice: number;  // Убираем ? чтобы сделать поле обязательным
 }
 
 // Validation formats
@@ -114,6 +116,10 @@ const ValidationMessages = {
     MED_BOOK_EXPIRY: {
         prompt: 'Дата окончания действия медицинской книжки\n\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025',
         error: 'Неверный формат даты.\n\nВведите дату окончания медицинской книжки\nФормат: ДД.ММ.ГГГГ\nПример: 01.01.2025'
+    },
+    MASTER_PRICE: {
+        prompt: '📝 Укажите процент ставки, согласованный с управляющим\n\n⚠️ Максимальная ставка 50%\n\nВведите число от 1 до 50',
+        error: '❌ Некорректный процент ставки\n\nПожалуйста, введите число от 1 до 50'
     }
 };
 
@@ -165,11 +171,12 @@ const showWelcome = async (ctx: MyContext) => {
         medBookExpiry: '',
         hasEducationCert: false,
         educationCertPhoto: '',
-        isSelfEmployed: false
+        isSelfEmployed: false,
+        masterPrice: 0  // Ставим начальное значение вместо undefined
     };
     ctx.scene.session.registrationForm = registrationForm;
 
-    const messageText = 'Давайте вместе устроимся на работу?!!!';
+    const messageText = 'Давайте вместе устроимся на работу!';
     const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('Давайте', 'start_registration')]
     ]);
@@ -183,16 +190,27 @@ const showWelcome = async (ctx: MyContext) => {
 };
 
 // Check self-employment status
+// Type guard для проверки типа callback query
+function isDataCallbackQuery(query: CallbackQuery): query is CallbackQuery.DataQuery {
+    return 'data' in query;
+}
+
 const checkSelfEmployment = async (ctx: MyContext) => {
-    if (ctx.callbackQuery?.data === 'start_registration') {
-        const messageText = 'Вы являетесь самозанятым?';
-        const keyboard = Markup.inlineKeyboard([
-            [
-                Markup.button.callback('Да', 'self_employed_yes'),
-                Markup.button.callback('Нет', 'self_employed_no')
-            ]
-        ]);
-        await ctx.editMessageText(messageText, keyboard);
+    // Проверяем наличие callback query и его тип
+    if (ctx.callbackQuery && isDataCallbackQuery(ctx.callbackQuery)) {
+        // Теперь TypeScript знает, что data существует
+        if (ctx.callbackQuery.data === 'start_registration') {
+            const messageText = 'Вы являетесь самозанятым?';
+            const keyboard = Markup.inlineKeyboard([
+                [
+                    Markup.button.callback('Да', 'self_employed_yes'),
+                    Markup.button.callback('Нет', 'self_employed_no')
+                ]
+            ]);
+            await ctx.editMessageText(messageText, keyboard);
+            // Отвечаем на callback query чтобы убрать "часики"
+            await ctx.answerCbQuery();
+        }
     }
     return ctx.wizard.next();
 };
@@ -538,21 +556,85 @@ const handleEducationCertQuestion = async (ctx: MyContext) => {
 const handleEducationCert = new Composer<MyContext>();
 handleEducationCert.action('education_cert_yes', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = true;
-    await ctx.reply('Отправьте пожалуйста фото сертификата');
+    await ctx.reply('Отправьте, пожалуйста, фото сертификата');
     return ctx.wizard.next();
 });
+
 handleEducationCert.action('education_cert_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasEducationCert = false;
-    return handleFinalStep(ctx);
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    // Пропускаем шаг handleEducationCertPhoto
+    ctx.wizard.selectStep(ctx.wizard.cursor + 2);
+    return;
 });
 
 // Handle education certificate photo
 const handleEducationCertPhoto = new Composer<MyContext>();
 handleEducationCertPhoto.on('photo', async (ctx) => {
+    // Сначала показываем, что фото получено
+    await ctx.reply('✅ Фото сертификата получено');
+    
     const photo = ctx.message.photo[ctx.message.photo.length - 1];
     ctx.scene.session.registrationForm.educationCertPhoto = photo.file_id;
-    return handleFinalStep(ctx);
+
+    // Делаем небольшую паузу перед следующим шагом
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Запрашиваем ставку
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    return ctx.wizard.next();
 });
+
+// Добавляем обработку пропуска фото для тех, у кого нет сертификата
+handleEducationCertPhoto.action('skip_photo', async (ctx) => {
+    await ctx.reply(ValidationMessages.MASTER_PRICE.prompt);
+    return ctx.wizard.next();
+});
+
+
+const handleMasterPrice = new Composer<MyContext>();
+
+// Регистрируем обработчик текстовых сообщений
+handleMasterPrice.on('text', async (ctx) => {
+    const price = parseInt(ctx.message.text);
+    console.log('Received master price:', price);
+    
+    // Проверяем, является ли введенное значение числом
+    if (isNaN(price)) {
+        await ctx.reply(ValidationMessages.MASTER_PRICE.error);
+        return;
+    }
+
+    // Проверяем диапазон
+    if (price <= 0 || price > 50) {
+        await ctx.reply(ValidationMessages.MASTER_PRICE.error);
+        return;
+    }
+
+    try {
+        ctx.scene.session.registrationForm.masterPrice = price;
+        console.log('Saved master price:', ctx.scene.session.registrationForm);
+
+        // Показываем подтверждение
+        await ctx.reply(
+            `✅ Установлена ставка: ${price}%\n\nПереходим к подготовке документов...`
+        );
+
+        // Переходим к финальному шагу
+        await handleFinalStep(ctx);
+    } catch (error) {
+        console.error('Error in handleMasterPrice:', error);
+        await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте ввести ставку снова.');
+    }
+});
+
+// Обрабатываем другие типы сообщений
+handleMasterPrice.on('message', async (ctx) => {
+    console.log('Received non-text message in master price handler');
+    await ctx.reply(ValidationMessages.MASTER_PRICE.error);
+});
+
+
 
 // Создаем улучшенное хранилище для групп документов
 const documentGroups = new Map<string, {
@@ -569,6 +651,10 @@ function logDebug(message: string, data?: any) {
 const handleSignedDocuments = new Composer<MyContext>();
 
 handleSignedDocuments.on('document', async (ctx) => {
+    console.log('DEBUG: Document handler triggered', {
+        sessionData: ctx.scene?.session,
+        registrationId: ctx.scene?.session?.registrationId
+    });
     const message = ctx.message;
     const mediaGroupId = message.media_group_id;
     const document = message.document;
@@ -717,12 +803,18 @@ const handleFinalStep = async (ctx: MyContext) => {
     await ctx.reply('Отлично, мы подготовим документы и отправим вам их сюда.');
     
     try {
-        console.log('Attempting to submit registration with data:', ctx.scene.session.registrationForm);
+        console.log('Attempting to submit registration with data:', {
+            ...ctx.scene.session.registrationForm,
+            masterPrice: ctx.scene.session.registrationForm.masterPrice
+        });
         
         const registrationResponse = await laravelService.submitRegistration(ctx.scene.session.registrationForm);
         console.log('Registration submitted successfully:', registrationResponse);
         
         const registrationId = registrationResponse.data.id;
+        // Явно сохраняем registrationId в сессии
+        ctx.scene.session.registrationId = registrationId;
+        console.log('DEBUG: Registration ID saved to session:', registrationId);
         ctx.scene.session.documentUpload = {
             documents: [],
             registrationId: registrationId
@@ -791,7 +883,6 @@ const handleFinalStep = async (ctx: MyContext) => {
 };
 
 
-// Create and export the wizard scene
 export const registrationWizard = new Scenes.WizardScene<MyContext>(
     'registration_wizard',
     showWelcome,
@@ -817,5 +908,42 @@ export const registrationWizard = new Scenes.WizardScene<MyContext>(
     handleMedBookExpiry,
     handleEducationCert,
     handleEducationCertPhoto,
-    handleSignedDocuments
+    handleMasterPrice, // Новый шаг
+    handleFinalStep,
+    // Исправляем этап ожидания документов
+    async (ctx) => {
+        // Явно возвращаем Promise<void>
+        await ctx.reply('Ожидаю подписанные документы...');
+        return;
+    }
 );
+
+registrationWizard.action('cancel', async (ctx) => {
+    await ctx.reply(
+        '❌ Регистрация отменена\n\n' +
+        'Вы можете начать заново, когда будете готовы',
+        Markup.inlineKeyboard([[
+            Markup.button.callback('Начать заново', 'start_registration')
+        ]])
+    );
+    return ctx.scene.leave();
+});
+
+// Добавляем обработчик документов через middleware
+registrationWizard.command('restart', async (ctx) => {
+    await ctx.scene.leave();
+    await ctx.scene.enter('registration_wizard');
+});
+
+// Регистрируем обработчик документов на уровне сцены
+registrationWizard.on('document', handleSignedDocuments);
+
+// Добавляем отладочный middleware
+registrationWizard.use(async (ctx, next) => {
+    console.log('Scene middleware triggered:', {
+        step: ctx.wizard?.cursor,
+        sessionData: ctx.scene?.session,
+        updateType: ctx.updateType
+    });
+    return next();
+});

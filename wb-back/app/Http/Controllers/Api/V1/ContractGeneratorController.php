@@ -43,7 +43,8 @@ class ContractGeneratorController extends Controller
             'corrAccount' => $registration->correspondent_account,
             'bankInn' => $registration->bank_inn,
             'bankKpp' => $registration->bank_kpp,
-            'phone' => $phone
+            'phone' => $phone,
+            'master_price' => $registration->master_price . '%' // Добавляем подстановку ставки с символом %
         ];
 
         foreach ($variables as $key => $value) {

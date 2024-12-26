@@ -11,6 +11,13 @@ import {loginWizard} from "../services/bot-master/scenes/loginWizard";
 import {registrationWizard} from "../services/bot-master/scenes/registrationWizard";
 import { changeDescriptionScene } from '../services/bot-master/scenes/changeDescriptionScene';
 // If you have other scenes like subscriptionScene, consider importing them similarly
+import { scheduleManagementScene } from '../services/bot-master/scenes/scheduleManagementScene';
+import { changePhotoScene } from '../services/bot-master/scenes/changePhotoScene';
+import { clientsManagementScene } from '../services/bot-master/scenes/clientsManagementScene';
+import { cancelBookingScene } from '../services/bot-master/scenes/cancel_booking_scene';
+import { changePhoneScene } from '../services/bot-master/scenes/change_phone_scene';
+import { deleteServiceScene } from '../services/bot-master/scenes/delete_service_scene';
+import { addServiceScene } from '../services/bot-master/scenes/add_service_scene';
 
 
 const botToken: string = process.env.TELEGRAM_BOT_TOKEN_MASTER!;
@@ -27,6 +34,13 @@ const stage = new Scenes.Stage<MyContext>([
     loginWizard,
     registrationWizard,
     changeDescriptionScene,
+    scheduleManagementScene,
+    changePhotoScene,
+    clientsManagementScene,
+    cancelBookingScene,
+    changePhoneScene,
+    deleteServiceScene,
+    addServiceScene,
 ]);
 
 // Middleware to log incoming updates

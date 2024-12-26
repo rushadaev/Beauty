@@ -54,6 +54,7 @@ class EmployeeRegistrationController extends Controller
                 'has_education_cert' => 'required|boolean',
                 'education_cert_photo' => 'nullable|string',
                 'is_self_employed' => 'required|boolean',
+                'master_price' => 'required|integer|min:1|max:50', // Добавляем валидацию ставки
             ]);
 
             if ($validator->fails()) {
@@ -121,113 +122,165 @@ class EmployeeRegistrationController extends Controller
         }
     }
 
-     /**
-     * Upload signed documents for the employee registration
-     *
-     * @param Request $request
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function uploadSignedDocuments(Request $request, $id)
-    {
-        Log::info('Uploading signed documents request', [
-            'registration_id' => $id,
-            'request_data' => $request->all()
-        ]);
+   /**
+* Upload signed documents for the employee registration
+*
+* @param Request $request
+* @param int $id
+* @return \Illuminate\Http\JsonResponse
+*/
+public function uploadSignedDocuments(Request $request, $id)
+{
+   Log::info('Uploading signed documents request', [
+       'registration_id' => $id,
+       'request_data' => $request->all()
+   ]);
 
-        try {
-            $registration = EmployeeRegistration::findOrFail($id);
+   try {
+       $registration = EmployeeRegistration::findOrFail($id);
 
-            $validator = Validator::make($request->all(), [
-                'files' => 'required|array',
-                'files.*.url' => 'required|string|url',
-                'files.*.name' => 'required|string|max:255'
-            ]);
+       $validator = Validator::make($request->all(), [
+           'files' => 'required|array',
+           'files.*.url' => 'required|string|url',
+           'files.*.name' => 'required|string|max:255'
+       ]);
 
-            if ($validator->fails()) {
-                Log::error('Documents validation failed', $validator->errors()->toArray());
-                return response()->json(['errors' => $validator->errors()], 422);
-            }
+       if ($validator->fails()) {
+           Log::error('Documents validation failed', $validator->errors()->toArray());
+           return response()->json(['errors' => $validator->errors()], 422);
+       }
 
-            $files = $request->files;
-            $uploadedFiles = [];
+       $files = $request->input('files', []);
+       $uploadedFiles = [];
 
-            foreach ($files as $file) {
-                // Создаем безопасное имя файла
-                $safeName = Carbon::now()->timestamp . '_' . 
-                           preg_replace('/[^a-zA-Z0-9.]/', '_', $file['name']);
-                
-                // Формируем путь для сохранения
-                $path = "employee_registrations/{$registration->id}/signed_documents/{$safeName}";
-                
-                try {
-                    // Получаем содержимое файла
-                    $fileContent = file_get_contents($file['url']);
-                    if ($fileContent === false) {
-                        throw new \Exception("Failed to download file: {$file['name']}");
-                    }
+       foreach ($files as $file) {
+           Log::info('Processing file', [
+               'name' => $file['name'],
+               'url' => $file['url']
+           ]);
 
-                    // Сохраняем файл
-                    if (!Storage::put($path, $fileContent)) {
-                        throw new \Exception("Failed to save file: {$file['name']}");
-                    }
+           // Создаем безопасное имя файла
+           $safeName = $this->generateSafeFileName($file['name']);
+           
+           // Формируем путь для сохранения
+           $path = sprintf(
+               'employee_registrations/%d/signed_documents/%s',
+               $registration->id,
+               $safeName
+           );
+           
+           Log::info('Attempting to save file', [
+               'path' => $path,
+               'safe_name' => $safeName
+           ]);
 
-                    // Создаем запись о документе
-                    $document = $registration->signedDocuments()->create([
-                        'path' => $path,
-                        'original_name' => $file['name']
-                    ]);
+           try {
+               // Создаем директорию если её нет
+               $directory = dirname(storage_path('app/' . $path));
+               if (!file_exists($directory)) {
+                   mkdir($directory, 0755, true);
+               }
 
-                    $uploadedFiles[] = [
-                        'original_name' => $file['name'],
-                        'stored_path' => $path
-                    ];
-                } catch (\Exception $e) {
-                    Log::error('Error processing file', [
-                        'file_name' => $file['name'],
-                        'error' => $e->getMessage()
-                    ]);
-                    throw $e;
-                }
-            }
+               // Получаем содержимое файла
+               $fileContent = file_get_contents($file['url']);
+               if ($fileContent === false) {
+                   Log::error('Failed to download file', [
+                       'file_name' => $file['name'],
+                       'url' => $file['url']
+                   ]);
+                   throw new \Exception("Failed to download file: {$file['name']}");
+               }
 
-            // Обновляем статус регистрации
-            $registration->update([
-                'status' => 'documents_uploaded',
-                'documents_uploaded_at' => Carbon::now()
-            ]);
+               // Сохраняем файл
+               if (!Storage::put($path, $fileContent)) {
+                   Log::error('Failed to save file', [
+                       'path' => $path
+                   ]);
+                   throw new \Exception("Failed to save file: {$file['name']}");
+               }
 
-            Log::info('Documents uploaded successfully', [
-                'registration_id' => $id,
-                'files_count' => count($uploadedFiles)
-            ]);
+               // Создаем запись о документе
+               $document = $registration->signedDocuments()->create([
+                   'path' => $path,
+                   'original_name' => $file['name']
+               ]);
 
-            return response()->json([
-                'message' => 'Documents uploaded successfully',
-                'data' => [
-                    'registration_id' => $registration->id,
-                    'uploaded_files' => $uploadedFiles,
-                    'status' => $registration->status
-                ]
-            ], 200);
+               Log::info('File saved successfully', [
+                   'document_id' => $document->id,
+                   'file_name' => $file['name'],
+                   'path' => $path
+               ]);
 
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::error('Registration not found', ['id' => $id]);
-            return response()->json([
-                'message' => 'Registration not found'
-            ], 404);
+               $uploadedFiles[] = [
+                   'original_name' => $file['name'],
+                   'stored_path' => $path
+               ];
+           } catch (\Exception $e) {
+               Log::error('Error processing file', [
+                   'file_name' => $file['name'],
+                   'error' => $e->getMessage(),
+                   'trace' => $e->getTraceAsString()
+               ]);
+               throw $e;
+           }
+       }
 
-        } catch (\Exception $e) {
-            Log::error('Failed to upload documents', [
-                'registration_id' => $id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+       // Обновляем статус регистрации
+       $registration->update([
+           'status' => 'documents_uploaded',
+           'documents_uploaded_at' => Carbon::now()
+       ]);
 
-            return response()->json([
-                'message' => 'Failed to upload documents',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
+       Log::info('Documents uploaded successfully', [
+           'registration_id' => $id,
+           'files_count' => count($uploadedFiles),
+           'files' => $uploadedFiles
+       ]);
+
+       return response()->json([
+           'message' => 'Documents uploaded successfully',
+           'data' => [
+               'registration_id' => $registration->id,
+               'uploaded_files' => $uploadedFiles,
+               'status' => $registration->status
+           ]
+       ], 200);
+
+   } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+       Log::error('Registration not found', ['id' => $id]);
+       return response()->json([
+           'message' => 'Registration not found'
+       ], 404);
+
+   } catch (\Exception $e) {
+       Log::error('Failed to upload documents', [
+           'registration_id' => $id,
+           'error' => $e->getMessage(),
+           'trace' => $e->getTraceAsString()
+       ]);
+
+       return response()->json([
+           'message' => 'Failed to upload documents',
+           'error' => $e->getMessage()
+       ], 500);
+   }
+}
+
+/**
+* Generate a safe filename from the original name
+* 
+* @param string $originalName
+* @return string
+*/
+private function generateSafeFileName(string $originalName): string 
+{
+   // Получаем расширение файла
+   $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+   
+   // Создаем базовое имя из timestamp и хеша оригинального имени
+   $timestamp = Carbon::now()->timestamp;
+   $hash = substr(md5($originalName), 0, 8);
+   
+   return "{$timestamp}_{$hash}.{$extension}";
+}
 }

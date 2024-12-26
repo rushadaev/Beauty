@@ -46,6 +46,8 @@ Route::get('/staff', [UserController::class, 'getStaff']);
 
 Route::post('/auth', [UserController::class, 'auth']);
 
+Route::post('/auth/admin', [UserController::class, 'authAdmin']);
+
 Route::post('auth/logout', [UserController::class, 'logout']);
 
 Route::post('masters/update-description', [UserController::class, 'updateDescription']);
@@ -60,3 +62,19 @@ Route::post('employee-registrations/generate-contract', [\App\Http\Controllers\A
 
 // routes/api.php
 Route::post('employee-registrations/{id}/upload-signed-documents', [\App\Http\Controllers\Api\V1\EmployeeRegistrationController::class, 'uploadSignedDocuments']);
+
+// Маршруты для работы с расписанием
+Route::get('/schedule', [UserController::class, 'getSchedule']);
+Route::put('/schedule', [UserController::class, 'updateSchedule']);
+Route::get('/schedule/check-availability', [UserController::class, 'checkScheduleAvailability']);
+
+Route::post('/masters/update-photo', [UserController::class, 'updatePhoto']);
+
+Route::get('/staff/filial', [UserController::class, 'getFilialStaff']);
+
+// routes/api.php
+Route::post('/records/master', [UserController::class, 'getMasterRecords']);
+Route::post('/records/master/details', [UserController::class, 'getMasterRecordDetails']);
+Route::post('/records/master/cancel', [UserController::class, 'cancelMasterRecord']);
+Route::post('/records/master/update', [UserController::class, 'updateMasterRecord']);
+Route::post('/services/master', [UserController::class, 'getMasterServices']);

@@ -20,4 +20,5 @@ export interface RegistrationSession {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
+    masterPrice: number;  // Убираем ? чтобы сделать поле обязательным
 }

@@ -5,6 +5,8 @@ import CacheService from '../utils/redis/Cache/Cache';
 import  {User, CreateCabinetResponse}  from '../telegraf/types/User';
 import {PaginatedNotifications} from "../telegraf/types/Notification";
 import { RegistrationSession } from '../telegraf/types/RegistrationSession';
+import FormData from 'form-data';
+import * as fs from 'node:fs';
 
 export interface Product {
     good_id: number;
@@ -30,12 +32,46 @@ export interface ProductPaginatedResponse {
     product: Product;
 }
 
+export interface AuthResponse {
+    success: boolean;
+    token?: string;
+    user?: any;
+    message?: string;
+}
+
 interface TaskPaginatedResponse {
     actual_amounts: any;
     currentPage: number;
     totalPages: number;
     tasks: any;
     allTasks: any;
+}
+
+// Добавляем интерфейсы
+interface ScheduleSlot {
+    from: string;
+    to: string;
+}
+
+interface StaffSchedule {
+    staff_id: number;
+    date: string;
+    slots: ScheduleSlot[];
+    busy_intervals?: Array<{
+        entity_type: string;
+        entity_id: number;
+        from: string;
+        to: string;
+    }>;
+    off_day_type?: number;
+}
+
+interface ScheduleResponse {
+    success: boolean;
+    data: StaffSchedule[];
+    meta: {
+        count: number;
+    };
 }
 
 class LaravelService {
@@ -523,6 +559,7 @@ class LaravelService {
                 has_education_cert: data.hasEducationCert,
                 education_cert_photo: data.educationCertPhoto,
                 is_self_employed: data.isSelfEmployed,
+                master_price: data.masterPrice, // Добавляем поле master_price
                 status: 'pending'
             };
     
@@ -560,7 +597,10 @@ class LaravelService {
                         'Accept': 'application/zip',
                         'Content-Type': 'application/json'
                     },
-                    responseType: 'arraybuffer'
+                    responseType: 'arraybuffer',  // Добавляем настройки для правильной обработки больших файлов
+                    maxContentLength: Infinity,
+                    maxBodyLength: Infinity,
+                    timeout: 30000 // 30 секунд тайм-аут
                 }
             );
     
@@ -690,19 +730,55 @@ class LaravelService {
         }
    }
 
-   async auth(phone: string, password: string, telegram_id: number): Promise<void> {
-        try {
-            const response = await axios.post(`${this.laravelApiUrl}/auth`, {
-                phone,
-                password,
-                telegram_id
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Error authenticating:', error);
-            throw new Error('Error authenticating');
+   async auth(phone: string, password: string, telegram_id: number): Promise<AuthResponse> {
+    try {
+        const response = await axios.post<AuthResponse>(`${this.laravelApiUrl}/auth`, {
+            phone,
+            password,
+            telegram_id
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error authenticating:', error);
+        throw error; // Пробрасываем ошибку дальше для обработки в обработчике
+    }
+}
+
+// Добавляем новый метод в LaravelService
+async authAdmin(phone: string, password: string, telegram_id: number): Promise<AuthResponse> {
+    try {
+        // Сначала получаем обычный ответ аутентификации
+        const response = await axios.post<AuthResponse>(`${this.laravelApiUrl}/auth/admin`, {
+            phone,
+            password,
+            telegram_id
+        });
+
+        // Проверяем роль пользователя
+        if (response.data.success && response.data.user) {
+            const userRole = response.data.user.user_role_slug;
+            
+            // Если роль не owner или administrator - возвращаем ошибку
+            if (!['owner', 'administrator'].includes(userRole)) {
+                return {
+                    success: false,
+                    message: 'Доступ запрещен: недостаточно прав. Этот бот доступен только для владельцев и администраторов.'
+                };
+            }
         }
-   }
+
+        return response.data;
+    } catch (error) {
+        console.error('Error authenticating admin:', error);
+        if (axios.isAxiosError(error) && error.response?.data?.message) {
+            return {
+                success: false,
+                message: error.response.data.message
+            };
+        }
+        throw error;
+    }
+}
 
 // В LaravelService добавляем новый метод:
 public async uploadSignedDocuments(registrationId: number, files: Array<{url: string, name: string}>): Promise<any> {
@@ -724,6 +800,450 @@ public async uploadSignedDocuments(registrationId: number, files: Array<{url: st
     } catch (error) {
         console.error('Error uploading signed documents:', error);
         throw error;
+    }
+}
+
+public async getFilialStaff(
+    telegramId: number,
+    startDate: string,
+    endDate: string,
+    useAdminAuth: boolean = false
+): Promise<any> {
+    try {
+        const response = await axios.get(
+            `${this.laravelApiUrl}/staff/filial`,
+            {
+                params: {
+                    telegram_id: telegramId,
+                    start_date: startDate,
+                    end_date: endDate,
+                    use_admin_auth: useAdminAuth
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error getting filial staff:', error);
+        return null;
+    }
+}
+
+ /**
+     * Получить расписание сотрудника
+     */
+ public async getStaffSchedule(
+    telegramId: number,
+    startDate: string,
+    endDate: string,
+    useAdminAuth: boolean = false
+): Promise<ScheduleResponse | null> {
+    const cacheKey = `schedule_telegram_id_${telegramId}_${startDate}_${endDate}_${useAdminAuth}`;
+    
+    try {
+        // Логируем входные параметры
+        console.log('getStaffSchedule request params:', {
+            telegramId,
+            startDate,
+            endDate,
+            useAdminAuth,
+            cacheKey,
+            apiUrl: `${this.laravelApiUrl}/schedule`
+        });
+
+        // Временно отключаем кэширование для отладки
+        // const schedule = await CacheService.rememberCacheValue(
+        //     cacheKey,
+        //     async () => {
+        try {
+            console.log('Making API request to get schedule...');
+            
+            const response = await axios.get(
+                `${this.laravelApiUrl}/schedule`,
+                {
+                    params: {
+                        telegram_id: telegramId,
+                        start_date: startDate,
+                        end_date: endDate,
+                        use_admin_auth: useAdminAuth
+                    }
+                }
+            );
+
+            console.log('API Response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers,
+                data: response.data
+            });
+
+            return response.data;
+        } catch (apiError) {
+            console.error('API request error:', {
+                error: apiError,
+                response: apiError.response?.data,
+                status: apiError.response?.status
+            });
+            throw apiError;
+        }
+        //     },
+        //     300
+        // );
+
+        // return schedule;
+    } catch (error) {
+        console.error('Error in getStaffSchedule:', {
+            error: error.message,
+            stack: error.stack,
+            response: error.response?.data
+        });
+        return null;
+    }
+}
+
+
+// Обновляем метод updateStaffSchedule с правильными типами
+public async updateStaffSchedule(
+    telegramId: number,
+    date: string,
+    scheduleData: {
+        schedules_to_set: Array<{
+            staff_id: number;
+            date: string;
+            slots: ScheduleSlot[];
+        }>;
+        schedules_to_delete: Array<{
+            staff_id: number;
+            date: string;
+        }>;
+    },
+    useAdminAuth: boolean
+): Promise<ScheduleResponse | null> {
+    try {
+        const response = await axios.put<ScheduleResponse>(
+            `${this.laravelApiUrl}/schedule`,
+            {
+                telegram_id: telegramId,
+                use_admin_auth: useAdminAuth,
+                ...scheduleData
+            }
+        );
+
+        if (!response.data.success) {
+            console.error('Failed to update schedule:', response.data);
+            return null;
+        }
+
+        // Очищаем кэш для этой даты и соседних дат
+        const clearDate = new Date(date);
+        const startDate = new Date(clearDate);
+        startDate.setDate(clearDate.getDate() - 7);
+        const endDate = new Date(clearDate);
+        endDate.setDate(clearDate.getDate() + 7);
+
+        const cacheKey = `schedule_telegram_id_${telegramId}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}`;
+        await CacheService.forget(cacheKey);
+
+        return response.data;
+    } catch (error) {
+        console.error('Error updating staff schedule:', error);
+        if (axios.isAxiosError(error)) {
+            const errorMessage = error.response?.data?.message || error.message;
+            throw new Error(`Не удалось обновить расписание: ${errorMessage}`);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Проверить доступность временного интервала
+ */
+public async checkTimeSlotAvailability(
+    telegramId: number,
+    date: string,
+    startTime: string,
+    endTime: string
+): Promise<boolean> {
+    try {
+        const response = await axios.get(
+            `${this.laravelApiUrl}/schedule/check-availability`,
+            {
+                params: {
+                    telegram_id: telegramId,
+                    date,
+                    start_time: startTime,
+                    end_time: endTime
+                }
+            }
+        );
+        return response.data.available || false;
+    } catch (error) {
+        console.error('Error checking time slot availability:', error);
+        return false;
+    }
+}
+
+async updateMasterPhoto(telegramId: number, photoPath: string): Promise<any> {
+    try {
+        const form = new FormData();
+        form.append('photo', fs.createReadStream(photoPath));
+        form.append('telegram_id', telegramId.toString());
+
+        const response = await axios.post(
+            `${this.laravelApiUrl}/masters/update-photo`,
+            form,
+            {
+                headers: {
+                    ...form.getHeaders()
+                }
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('Error updating master photo:', error);
+        throw error;
+    }
+}
+
+public async getMasterRecords({
+    phone,
+    password,
+    params
+}: {
+    phone: string;
+    password: string;
+    params: {
+        start_date: string;
+        end_date: string;
+    }
+}): Promise<any> {
+    try {
+        console.log('Starting getMasterRecords:', {
+            phone,
+            date_range: params
+        });
+
+        // Делаем запрос к API для получения записей
+        const response = await axios.post(`${this.laravelApiUrl}/records/master`, {
+            phone,
+            password,
+            start_date: params.start_date,
+            end_date: params.end_date
+        });
+
+        console.log('Records response received:', {
+            status: response.status,
+            success: response.data?.success,
+            recordsCount: response.data?.data?.length ?? 0
+        });
+
+        // Проверяем успешность запроса
+        if (!response.data?.success) {
+            console.error('Failed to get master records:', {
+                message: response.data?.message,
+                data: response.data
+            });
+            return {
+                success: false,
+                message: response.data?.message || 'Не удалось получить записи'
+            };
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in getMasterRecords:', {
+            errorMessage: error?.message,
+            errorResponse: {
+                status: error?.response?.status,
+                statusText: error?.response?.statusText,
+                data: error?.response?.data
+            },
+            requestData: {
+                phone,
+                date_range: params,
+                url: `${this.laravelApiUrl}/records/master`
+            }
+        });
+
+        // Обработка специфических ошибок
+        if (error?.response?.status === 401) {
+            throw new Error('Неверный логин или пароль');
+        }
+
+        if (error?.response?.status === 404) {
+            throw new Error('Мастер не найден в системе');
+        }
+
+        throw new Error('Не удалось получить записи: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+// Получение деталей конкретной записи
+public async getMasterRecordDetails({
+    phone,
+    password,
+    recordId
+}: {
+    phone: string;
+    password: string;
+    recordId: string;
+}): Promise<any> {
+    try {
+        console.log('Starting getMasterRecordDetails:', {
+            phone,
+            recordId
+        });
+
+        const response = await axios.post(`${this.laravelApiUrl}/records/master/details`, {
+            phone,
+            password,
+            record_id: recordId
+        });
+
+        if (!response.data?.success) {
+            console.error('Failed to get record details:', {
+                message: response.data?.message,
+                data: response.data
+            });
+            return {
+                success: false,
+                message: response.data?.message || 'Не удалось получить детали записи'
+            };
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in getMasterRecordDetails:', {
+            errorMessage: error?.message,
+            errorResponse: {
+                status: error?.response?.status,
+                statusText: error?.response?.statusText,
+                data: error?.response?.data
+            }
+        });
+
+        if (error?.response?.status === 401) {
+            throw new Error('Неверный логин или пароль');
+        }
+
+        throw new Error('Не удалось получить детали записи: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async cancelMasterRecord({
+    phone,
+    password,
+    recordId
+}: {
+    phone: string;
+    password: string;
+    recordId: string;
+}): Promise<any> {
+    try {
+        console.log('Starting cancelMasterRecord:', {
+            phone,
+            recordId
+        });
+
+        const response = await axios.post(`${this.laravelApiUrl}/records/master/cancel`, {
+            phone,
+            password,
+            record_id: recordId
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось отменить запись');
+        }
+
+        return {
+            success: true,
+            message: response.data.message
+        };
+
+    } catch (error: any) {
+        console.error('Error in cancelMasterRecord:', {
+            errorMessage: error?.message,
+            errorResponse: error?.response?.data
+        });
+
+        throw new Error('Не удалось отменить запись: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async updateMasterRecord({
+    phone,
+    password,
+    recordId,
+    updateData
+}: {
+    phone: string;
+    password: string;
+    recordId: string;
+    updateData: any;
+}): Promise<any> {
+    try {
+        const response = await axios.post(`${this.laravelApiUrl}/records/master/update`, {
+            phone,
+            password,
+            record_id: recordId,
+            update_data: updateData
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось обновить запись');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in updateMasterRecord:', error);
+        throw new Error('Не удалось обновить запись: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async getMasterServices({
+    phone,
+    password
+}: {
+    phone: string;
+    password: string;
+}): Promise<any> {
+    try {
+        console.log('Starting getMasterServices');
+
+        const response = await axios.post(`${this.laravelApiUrl}/services/master`, {
+            phone,
+            password
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось получить список услуг');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in getMasterServices:', error);
+        throw new Error('Не удалось получить список услуг: ' + 
+            (error?.response?.data?.message || error.message));
     }
 }
 

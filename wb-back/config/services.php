@@ -39,5 +39,7 @@ return [
         'user_token' => env('YCLIENTS_USER_TOKEN', 'eb4b7a6a59b300074be260e045ade57c'),
         'login' => env('YCLIENTS_LOGIN', null),
         'password' => env('YCLIENTS_PASSWORD', null),
+        'admin_login' => env('YCLIENTS_ADMIN_LOGIN'),
+        'admin_password' => env('YCLIENTS_ADMIN_PASSWORD'),
     ],
 ];
