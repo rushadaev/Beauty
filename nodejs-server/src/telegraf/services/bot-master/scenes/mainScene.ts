@@ -3,6 +3,7 @@ import { MyContext } from '../../../types/MyContext';
 import { cabinetGate } from "../../../utils/cabinetGate";
 import laravelService from "../../../../services/laravelService";
 import { changeDescriptionScene } from './changeDescriptionScene';
+import * as fs from 'fs';
 
 export const mainScene = new Scenes.BaseScene<MyContext>('main');
 
@@ -150,20 +151,76 @@ mainScene.action('education', async (ctx) => {
 });
 
 mainScene.action('documents', async (ctx) => {
-    const message = `[Мои документы]\n\nВ кнопках выводим три документа из карточки мастера`;
+    const message = `[Мои документы]\n\nНажмите кнопку для получения ваших документов`;
     const documentsKeyboard = Markup.inlineKeyboard([
         [
-            Markup.button.callback('документ 1', 'document_1'),
-            Markup.button.callback('документ 2', 'document_2'),
-        ],
-        [
-            Markup.button.callback('документ 3', 'document_3'),
+            Markup.button.callback('📄 Получить документы', 'get_documents'),
         ],
         [
             Markup.button.callback('👌 Главное меню', 'mainmenu'),
         ]
     ]);
     await ctx.editMessageText(message, documentsKeyboard);
+});
+
+mainScene.action('get_documents', async (ctx) => {
+    try {
+        // Получаем номер телефона из сессии или ctx
+        const phone = ctx.session?.phone;
+        
+        if (!phone) {
+            await ctx.reply('Ошибка: не найден номер телефона. Попробуйте перелогиниться.',
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('👌 Главное меню', 'mainmenu')
+                ]])
+            );
+            return;
+        }
+
+        // Получаем документы
+        const documents = await laravelService.getMasterDocumentsByPhone(phone);
+        
+        if (documents && documents.length > 0) {
+            await ctx.reply('Отправляю ваши документы...');
+            
+            for (const doc of documents) {
+                try {
+                    const fileBuffer = await fs.promises.readFile(doc.path);
+                    await ctx.replyWithDocument({ 
+                        source: fileBuffer,
+                        filename: doc.original_name 
+                    });
+                    // Небольшая задержка между отправкой документов
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } catch (docError) {
+                    console.error('Error sending document:', {
+                        error: docError,
+                        document: doc
+                    });
+                    await ctx.reply(`Ошибка при отправке документа ${doc.original_name}`);
+                }
+            }
+
+            await ctx.reply('Все документы отправлены', 
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('👌 Главное меню', 'mainmenu')
+                ]])
+            );
+        } else {
+            await ctx.reply('Документы не найдены.',
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('👌 Главное меню', 'mainmenu')
+                ]])
+            );
+        }
+    } catch (error) {
+        console.error('Error in get_documents handler:', error);
+        await ctx.reply('Произошла ошибка при получении документов.',
+            Markup.inlineKeyboard([[
+                Markup.button.callback('👌 Главное меню', 'mainmenu')
+            ]])
+        );
+    }
 });
 
 mainScene.action('clients_management', async (ctx) => {

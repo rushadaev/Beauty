@@ -79,6 +79,10 @@ module.exports = {
                     from: path.resolve(__dirname, 'src/utils/pow/solve.wasm'),
                     to: path.resolve(__dirname, 'dist'),
                 },
+                {
+                    from: path.resolve(__dirname, 'src/telegraf/services/bot-master/scenes/photoexample.jpg'),
+                    to: path.resolve(__dirname, 'dist/telegraf/services/bot-master/scenes'),
+                },
             ],
         }),
     ],

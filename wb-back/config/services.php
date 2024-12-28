@@ -42,4 +42,13 @@ return [
         'admin_login' => env('YCLIENTS_ADMIN_LOGIN'),
         'admin_password' => env('YCLIENTS_ADMIN_PASSWORD'),
     ],
+
+    // Добавляем конфигурацию для уведомлений
+'telegram' => [
+    'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+    'bot_token_supplies' => env('TELEGRAM_BOT_TOKEN_SUPPLIES_NEW'),
+    'bot_token_master' => env('TELEGRAM_BOT_TOKEN_MASTER'),
+],
+
+    
 ];

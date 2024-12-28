@@ -36,6 +36,7 @@ changePhotoScene.enter(async (ctx: MyContext) => {
 
     await ctx.replyWithMarkdown(message, 
         Markup.inlineKeyboard([
+            [Markup.button.callback('📱 Посмотреть пример фото', 'show_photo_example')],
             [Markup.button.callback('❌ Отменить изменение фото', 'cancel_photo')],
             [Markup.button.callback('ℹ️ Помощь по загрузке', 'photo_help')],
             [Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
@@ -46,12 +47,22 @@ changePhotoScene.enter(async (ctx: MyContext) => {
 // Обработка полученных фотографий
 changePhotoScene.on('photo', async (ctx) => {
     try {
+        if (!ctx.session?.phone) {
+            throw new Error('Не найден номер телефона в сессии');
+        }
+
         const photo = ctx.message.photo[ctx.message.photo.length - 1];
         const file = await ctx.telegram.getFile(photo.file_id);
         
         if (!file.file_path) {
             throw new Error('Не удалось получить файл фотографии');
         }
+
+        logger.info('Processing photo:', {
+            width: photo.width,
+            height: photo.height,
+            file_id: photo.file_id
+        });
 
         // Проверка размеров фото
         if (photo.width < MIN_SIZE || photo.height < MIN_SIZE) {
@@ -66,7 +77,7 @@ changePhotoScene.on('photo', async (ctx) => {
         }
 
         // Проверка квадратного формата
-        if (Math.abs(photo.width - photo.height) > 10) { // Допуск в 10 пикселей
+        if (Math.abs(photo.width - photo.height) > 10) {
             await ctx.reply(
                 '⚠️ Фото должно быть квадратным (соотношение сторон 1:1).',
                 Markup.inlineKeyboard([
@@ -77,7 +88,7 @@ changePhotoScene.on('photo', async (ctx) => {
             return;
         }
 
-        await ctx.reply('⌛ Обрабатываем фотографию...');
+        const processingMessage = await ctx.reply('⌛ Обрабатываем фотографию...');
 
         // Получаем файл
         const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN_MASTER}/${file.file_path}`;
@@ -90,6 +101,7 @@ changePhotoScene.on('photo', async (ctx) => {
 
         // Проверка размера файла
         if (response.data.length > MAX_FILE_SIZE) {
+            await ctx.telegram.deleteMessage(ctx.chat!.id, processingMessage.message_id).catch(() => {});
             await ctx.reply(
                 '⚠️ Размер файла превышает 5 МБ. Пожалуйста, сожмите фото и попробуйте снова.',
                 Markup.inlineKeyboard([
@@ -110,34 +122,75 @@ changePhotoScene.on('photo', async (ctx) => {
         const tempFilePath = path.join(tempDir, `${ctx.from.id}_${Date.now()}.jpg`);
         fs.writeFileSync(tempFilePath, response.data);
 
+        logger.info('Temporary file saved:', { path: tempFilePath });
+
         try {
             const updateResult = await laravelService.updateMasterPhoto(
-                ctx.from.id,
+                ctx.session.phone,
                 tempFilePath
             );
-
-            if (updateResult?.success) {
+        
+            await ctx.telegram.deleteMessage(ctx.chat!.id, processingMessage.message_id).catch(() => {});
+        
+            // Проверяем именно поле success в ответе
+            if (updateResult && updateResult.success === true) {
+                try {
+                    const masterInfo = await laravelService.getMasterByPhone(ctx.session.phone!);
+                    
+                    await laravelService.createTaskForMaster({
+                        type: 'photo_update',
+                        masterPhone: ctx.session.phone!,
+                        masterName: masterInfo?.name || ctx.session.phone!,
+                        description: 'Обновить фото мастера на сайте - запросите у мастера новую фотографию, которую он поставил себе в профиль Yclients'
+                    });
+                } catch (error) {
+                    console.error('Error creating task:', error);
+                }
+            
+                
+            
                 await ctx.reply(
                     '✅ Фотография успешно обновлена!\n\nВаш профиль теперь выглядит более профессионально.',
                     Markup.inlineKeyboard([
-                        [Markup.button.callback('👀 Посмотреть мой профиль', 'view_profile')],
                         [Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
                     ])
                 );
-            } else {
-                throw new Error('Не удалось обновить фотографию');
+            }  else {
+                logger.error('Update result unsuccessful:', updateResult);
+                throw new Error(updateResult?.message || 'Не удалось обновить фотографию');
             }
+        } catch (error: any) {
+            logger.error('Error in photo update:', {
+                error: error.message,
+                phone: ctx.session.phone,
+                response: error.response?.data,
+                updateResult: error.updateResult // добавляем для отладки
+            });
+            
+            await ctx.reply(
+                '❌ Произошла ошибка при обновлении фотографии.\n\nПожалуйста, попробуйте позже или обратитесь в поддержку.',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('🔄 Попробовать снова', 'retry_photo')],
+                    [Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+                ])
+            );
         } finally {
             // Удаляем временный файл
             if (fs.existsSync(tempFilePath)) {
                 fs.unlinkSync(tempFilePath);
+                logger.info('Temporary file deleted:', { path: tempFilePath });
             }
         }
 
-    } catch (error) {
-        logger.error('Error updating photo:', error);
+    } catch (error: any) {
+        logger.error('Error processing photo:', {
+            error: error.message,
+            telegramId: ctx.from?.id,
+            sessionData: ctx.session
+        });
+        
         await ctx.reply(
-            '❌ Произошла ошибка при обновлении фотографии.\n\nПожалуйста, попробуйте позже или обратитесь в поддержку.',
+            '❌ Произошла ошибка при обработке фотографии.\n\nПожалуйста, убедитесь, что фото соответствует требованиям и попробуйте снова.',
             Markup.inlineKeyboard([
                 [Markup.button.callback('🔄 Попробовать снова', 'retry_photo')],
                 [Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
@@ -205,6 +258,52 @@ changePhotoScene.action('size_help', async (ctx) => {
                 [Markup.button.callback('👈 Назад', 'back_to_main')]
             ])
         }
+    );
+});
+
+// Добавляем обработчик для кнопки примера
+changePhotoScene.action('show_photo_example', async (ctx) => {
+    await ctx.answerCbQuery();
+    
+    // Сначала отправляем фото
+    // Используем абсолютный путь
+    const photoPath = '/usr/src/app/dist/telegraf/services/bot-master/scenes/photoexample.jpg';
+
+    console.log('Current __dirname:', __dirname);
+        console.log('Trying to access photo at:', photoPath);
+        console.log('File exists:', require('fs').existsSync(photoPath));
+        
+        // Проверим содержимое директории
+        const dir = '/usr/src/app/dist/telegraf/services/bot-master/scenes/';
+        console.log('Directory contents:', require('fs').readdirSync(dir));
+        
+        await ctx.replyWithPhoto(
+            { source: photoPath },
+            {
+                caption: `📸 *Пример правильного фото для профиля*
+
+✅ *Что сделано верно:*
+- Квадратный формат
+- Четкое изображение лица
+- Нейтральный светлый фон
+- Профессиональное освещение
+- Деловой внешний вид
+- Легкая улыбка
+- Прямой взгляд в камеру
+
+Ваше фото должно быть похожим по формату и стилю.`,
+            parse_mode: 'Markdown'
+        }
+    );
+    
+    // Затем отправляем кнопку для возврата
+    await ctx.reply(
+        'Отправьте ваше фото или выберите действие:',
+        Markup.inlineKeyboard([
+            [Markup.button.callback('🔄 Загрузить фото', 'retry_photo')],
+            [Markup.button.callback('❓ Помощь по загрузке', 'photo_help')],
+            [Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+        ])
     );
 });
 

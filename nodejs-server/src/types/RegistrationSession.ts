@@ -20,4 +20,5 @@ export interface RegistrationSession {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
+    telegram_id?: string; // Добавляем это поле
 }

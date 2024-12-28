@@ -26,8 +26,46 @@ interface RegistrationSession {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
+    selectedBranch?: Branch;
     masterPrice: number;  // Убираем ? чтобы сделать поле обязательным
+    branch_yclients_id?: number; // добавляем новое поле
 }
+
+// Добавляем новый интерфейс для филиалов
+interface Branch {
+    id: string;
+    name: string;
+    address: string;
+}
+
+// Добавляем список филиалов
+const BRANCHES: Branch[] = [
+    {
+        id: 'vdnh',
+        name: 'Cherry Town ВДНХ',
+        address: 'Москва, Звёздный бульвар, дом 10, строение 1, офис 20'
+    },
+    {
+        id: 'semenovskaya',
+        name: 'Cherry Town Семёновская',
+        address: 'Москва, площадь Семёновская, дом 7, корпус 17а, кабинет 9'
+    },
+    {
+        id: 'sportivnaya',
+        name: 'Cherry Town Спортивная',
+        address: 'Москва, улица Доватора, дом 6/6, корпус 8'
+    },
+    {
+        id: 'pushkinskaya',
+        name: 'Cherry Town Пушкинская',
+        address: 'Москва, Малый Палашёвский переулок, дом 6'
+    },
+    {
+        id: 'nekrasovka',
+        name: 'Cherry Town Некрасовка',
+        address: 'Москва, улица Покровская, дом 16'
+    }
+];
 
 // Validation formats
 const ValidationFormats = {
@@ -593,19 +631,15 @@ handleEducationCertPhoto.action('skip_photo', async (ctx) => {
 
 
 const handleMasterPrice = new Composer<MyContext>();
-
-// Регистрируем обработчик текстовых сообщений
 handleMasterPrice.on('text', async (ctx) => {
     const price = parseInt(ctx.message.text);
     console.log('Received master price:', price);
     
-    // Проверяем, является ли введенное значение числом
     if (isNaN(price)) {
         await ctx.reply(ValidationMessages.MASTER_PRICE.error);
         return;
     }
 
-    // Проверяем диапазон
     if (price <= 0 || price > 50) {
         await ctx.reply(ValidationMessages.MASTER_PRICE.error);
         return;
@@ -615,16 +649,56 @@ handleMasterPrice.on('text', async (ctx) => {
         ctx.scene.session.registrationForm.masterPrice = price;
         console.log('Saved master price:', ctx.scene.session.registrationForm);
 
-        // Показываем подтверждение
-        await ctx.reply(
-            `✅ Установлена ставка: ${price}%\n\nПереходим к подготовке документов...`
+        await ctx.reply(`✅ Установлена ставка: ${price}%`);
+
+        // Показываем выбор филиала
+        const keyboard = Markup.inlineKeyboard(
+            BRANCHES.map(branch => [
+                Markup.button.callback(branch.name, `select_branch_${branch.id}`)
+            ])
         );
 
-        // Переходим к финальному шагу
-        await handleFinalStep(ctx);
+        await ctx.reply('Выберите филиал, в котором будете работать:', keyboard);
+        return ctx.wizard.next();
     } catch (error) {
         console.error('Error in handleMasterPrice:', error);
         await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте ввести ставку снова.');
+    }
+});
+
+// Добавляем новый обработчик выбора филиала
+const handleBranchSelection = new Composer<MyContext>();
+handleBranchSelection.action(/select_branch_(.+)/, async (ctx) => {
+    const branchId = ctx.match[1];
+    const selectedBranch = BRANCHES.find(b => b.id === branchId);
+    
+    if (!selectedBranch) {
+        await ctx.reply('Ошибка выбора филиала. Пожалуйста, попробуйте снова.');
+        return;
+    }
+
+    try {
+        // Получаем Yclients ID филиала
+        const response = await laravelService.getBranchYclientsId(branchId);
+        
+        if (!response?.success || !response?.data?.yclients_id) {
+            throw new Error('Не удалось получить ID филиала');
+        }
+
+        ctx.scene.session.registrationForm.selectedBranch = selectedBranch;
+        ctx.scene.session.registrationForm.branch_yclients_id = response.data.yclients_id;
+        
+        await ctx.reply(
+            `✅ Выбран филиал: ${selectedBranch.name}\n` +
+            `📍 Адрес: ${selectedBranch.address}\n\n` +
+            `Переходим к подготовке документов...`
+        );
+
+        // Переходим к генерации документов
+        await handleFinalStep(ctx);
+    } catch (error) {
+        console.error('Error getting branch yclients_id:', error);
+        await ctx.reply('Произошла ошибка при выборе филиала. Пожалуйста, попробуйте снова.');
     }
 });
 
@@ -775,7 +849,14 @@ handleSignedDocuments.on('document', async (ctx) => {
 
             logDebug('Получен ответ от API:', { response });
 
-            await ctx.reply('Спасибо! Документы успешно получены. В ближайшее время мы проверим их и сообщим вам о результатах.');
+            await ctx.reply(
+                '✅ Документы успешно загружены!\n\n' +
+                'Теперь вы можете начать процесс трудоустройства.\n' +
+                'Нажмите кнопку ниже:',
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('🚀 Устроиться на работу', `start_employment_${registrationId}`)
+                ]])
+            );
             
             // Очищаем группу
             documentGroups.delete(mediaGroupId);
@@ -800,67 +881,49 @@ handleSignedDocuments.on('document', async (ctx) => {
 // Handle final step
 // В handleFinalStep добавим:
 const handleFinalStep = async (ctx: MyContext) => {
-    await ctx.reply('Отлично, мы подготовим документы и отправим вам их сюда.');
-    
     try {
-        console.log('Attempting to submit registration with data:', {
+        const selectedBranch = ctx.scene.session.registrationForm.selectedBranch;
+        if (!selectedBranch) {
+            throw new Error('Не выбран филиал');
+        }
+
+        const userId = ctx.from?.id;
+        console.log('Getting user ID from context:', userId);
+
+        if (!userId) {
+            console.error('No user ID found in context');
+            return;
+        }
+
+        const registrationData = {
             ...ctx.scene.session.registrationForm,
-            masterPrice: ctx.scene.session.registrationForm.masterPrice
-        });
+            work_address: selectedBranch.address,
+            telegram_id: userId.toString(),
+            branch_name: selectedBranch.name,
+            branch_id: selectedBranch.id,
+            branch_yclients_id: ctx.scene.session.registrationForm.branch_yclients_id
+        };
+
+        console.log('Full registration data being sent:', registrationData);
         
-        const registrationResponse = await laravelService.submitRegistration(ctx.scene.session.registrationForm);
+        const registrationResponse = await laravelService.submitRegistration(registrationData);
         console.log('Registration submitted successfully:', registrationResponse);
         
         const registrationId = registrationResponse.data.id;
-        // Явно сохраняем registrationId в сессии
         ctx.scene.session.registrationId = registrationId;
-        console.log('DEBUG: Registration ID saved to session:', registrationId);
-        ctx.scene.session.documentUpload = {
-            documents: [],
-            registrationId: registrationId
-        };
         
         if (!registrationId) {
             throw new Error('Registration ID not found in response');
         }
 
-        const zipBuffer = await laravelService.generateContract({
-            id: registrationId
-        });
+        await ctx.reply(
+            '✅ Ваша заявка успешно создана!\n\n' +
+            'Она будет рассмотрена в ближайшее время.\n' +
+            'После одобрения вам придут документы для подписания.\n\n' +
+            'Пожалуйста, ожидайте.'
+        );
 
-        await ctx.replyWithDocument({
-            source: zipBuffer,
-            filename: `Документы_${registrationResponse.data.contract_number}.zip`
-        });
-
-        const instructions = `
-Пожалуйста, внимательно прочитайте инструкцию!!!
-
-1. Распакуйте полученный архив
-2. Подпишите все документы
-3. Отправьте ВСЕ подписанные документы ОДНИМ СООБЩЕНИЕМ в этот чат
-
-❗️ Важные требования:
-- Отправьте все документы одним сообщением (можно выбрать несколько файлов)
-- Принимаются файлы в форматах PDF или DOCX
-- Убедитесь, что все документы хорошо читаемы
-- Проверьте наличие всех подписей перед отправкой
-
-Чтобы отправить несколько файлов одним сообщением:
-📱 В мобильном приложении:
-1. Нажмите на скрепку
-2. Выберите "Файл"
-3. Нажмите на три точки в правом верхнем углу
-4. Выберите все нужные документы
-5. Нажмите "Отправить"
-
-💻 В десктопной версии:
-1. Нажмите на скрепку
-2. Зажмите Ctrl и выберите все нужные файлы
-3. Нажмите "Открыть"`;
-
-        await ctx.reply(instructions, { parse_mode: 'HTML' });
-        return ctx.wizard.next();
+        
 
     } catch (error) {
         console.error('Error in handleFinalStep:', error);
@@ -909,6 +972,7 @@ export const registrationWizard = new Scenes.WizardScene<MyContext>(
     handleEducationCert,
     handleEducationCertPhoto,
     handleMasterPrice, // Новый шаг
+    handleBranchSelection,
     handleFinalStep,
     // Исправляем этап ожидания документов
     async (ctx) => {
@@ -946,4 +1010,70 @@ registrationWizard.use(async (ctx, next) => {
         updateType: ctx.updateType
     });
     return next();
+});
+
+// В registration_wizard добавляем обработчик:
+
+registrationWizard.action(/start_employment_(\d+)/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery('⏳ Отправляем приглашение...');
+        const registrationId = ctx.match[1]; // Получаем ID из callback_data
+
+        const result = await laravelService.sendEmploymentInvite(registrationId);
+        
+        if (result.success) {
+            await ctx.editMessageText(
+                "📱 Вам отправлено СМС-приглашение для регистрации в системе.\n\n" +
+                "❗️ Пожалуйста:\n" +
+                "1. Проверьте SMS\n" +
+                "2. Перейдите по ссылке\n" +
+                "3. Завершите регистрацию в системе\n\n" +
+                "После регистрации нажмите кнопку ниже:",
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('✅ Я зарегистрировался', `complete_registration_${registrationId}`)
+                ]])
+            );
+        } else {
+            throw new Error(result.message || 'Failed to send invite');
+        }
+    } catch (error) {
+        console.error('Error starting employment:', error);
+        await ctx.reply(
+            '❌ Произошла ошибка при отправке приглашения.\n' +
+            'Пожалуйста, попробуйте позже или обратитесь к администратору.'
+        );
+    }
+});
+
+registrationWizard.action(/^complete_registration_(\d+)$/, async (ctx) => {
+    try {
+        const regId = ctx.match[1];
+        await ctx.answerCbQuery('⏳ Создаем профиль мастера...');
+
+        const result = await laravelService.createStaffProfile(regId); // Здесь regId уже string
+        
+        if (result.success) {
+            await ctx.editMessageText(
+                "🎉 Поздравляем!\n\n" +
+                "Ваш профиль мастера успешно создан.\n" +
+                "Добро пожаловать в команду CherryTown! ✨\n\n" +
+                "Теперь вы можете приступать к работе.",
+                Markup.inlineKeyboard([[
+                    Markup.button.callback('📱 В главное меню', 'mainmenu')
+                ]])
+            );
+        } else {
+            throw new Error(result.message || 'Failed to create profile');
+        }
+    } catch (error) {
+        console.error('Error completing registration:', error);
+        const currentRegId = ctx.match ? ctx.match[1] : ''; // Безопасное получение ID
+        await ctx.reply(
+            '❌ Произошла ошибка при создании профиля.\n' +
+            'Пожалуйста, попробуйте позже или обратитесь к администратору.',
+            Markup.inlineKeyboard([[
+                Markup.button.callback('🔄 Попробовать снова', `complete_registration_${currentRegId}`)
+            ]])
+        );
+    }
 });

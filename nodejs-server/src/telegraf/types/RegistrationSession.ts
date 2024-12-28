@@ -1,4 +1,5 @@
 export interface RegistrationSession {
+    telegram_id: any;
     fullName?: string;
     birthDate?: string;
     passport?: string;
@@ -20,5 +21,10 @@ export interface RegistrationSession {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
-    masterPrice: number;  // Убираем ? чтобы сделать поле обязательным
+    masterPrice: number;
+    selectedBranch?: {
+        id: string;
+        name: string;
+        address: string;
+    };
 }

@@ -1,29 +1,27 @@
 #!/bin/sh
 
+# Set working directory
+WORK_DIR="/var/www/wb-back"
+
 echo "Script starting at $(date)"
 
-# Create directories for cron jobs and logs
-mkdir -p /var/www/wb-back/cron.d
-mkdir -p /var/www/wb-back/storage/logs
+# Create directories and set permissions
+mkdir -p ${WORK_DIR}/storage/logs
+mkdir -p ${WORK_DIR}/cron.d
+touch ${WORK_DIR}/storage/logs/scheduler.log
+touch ${WORK_DIR}/storage/logs/warehouse-notifications.log
 
-# Set initial permissions
-chown -R www-data:www-data /var/www/wb-back/storage
-chmod -R 775 /var/www/wb-back/storage
+# Set permissions
+chown -R www-data:www-data ${WORK_DIR}/storage
+chmod -R 775 ${WORK_DIR}/storage
+chmod 664 ${WORK_DIR}/storage/logs/*.log
 
-# Create crontab file
-cat > /var/www/wb-back/cron.d/laravel-schedule << 'CRON'
-# Laravel Scheduler
-* * * * * cd /var/www/wb-back && php artisan schedule:run --verbose >> /var/www/wb-back/storage/logs/scheduler.log 2>&1
+# Create crontab file with correct syntax
+echo "* * * * * cd ${WORK_DIR} && php artisan schedule:run --verbose >> ${WORK_DIR}/storage/logs/scheduler.log 2>&1" > ${WORK_DIR}/cron.d/laravel-schedule
+chmod 0644 ${WORK_DIR}/cron.d/laravel-schedule
 
-# Branches sync - hourly
-0 * * * * cd /var/www/wb-back && php artisan app:fetch-branches-info >> /var/www/wb-back/storage/logs/branches-sync.log 2>&1
-
-# Full branches sync - daily at 3 AM
-0 3 * * * cd /var/www/wb-back && php artisan app:fetch-branches-info --full >> /var/www/wb-back/storage/logs/branches-sync-daily.log 2>&1
-CRON
-
-# Set crontab permissions
-chmod 0644 /var/www/wb-back/cron.d/laravel-schedule
+echo "Crontab content:"
+cat ${WORK_DIR}/cron.d/laravel-schedule
 
 echo "Starting Supercronic..."
-exec supercronic /var/www/wb-back/cron.d/laravel-schedule
+exec supercronic -debug ${WORK_DIR}/cron.d/laravel-schedule

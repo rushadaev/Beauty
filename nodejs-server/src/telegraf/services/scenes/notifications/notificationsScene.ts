@@ -22,10 +22,10 @@ const noKeyboard = [
 
 
 notifictationsScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 notifictationsScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 
 notifictationsScene.action('create_notification', async (ctx) => {

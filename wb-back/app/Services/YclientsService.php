@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 
 
 class YclientsService
@@ -1466,6 +1468,8 @@ public function setStaffSchedule(
     }
 }
 
+
+
 public function updateMasterPhoto($photoFile, string $phone): array
 {
     try {
@@ -1474,13 +1478,39 @@ public function updateMasterPhoto($photoFile, string $phone): array
             'file_size' => $photoFile->getSize()
         ]);
 
-        // Сначала найдем мастера
+        // 1. Аутентификация через админский аккаунт
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        $authResult = $this->authenticateByCredentials($adminLogin, $adminPassword);
+        Log::info('Admin authentication result:', [
+            'success' => $authResult['success'] ?? false,
+            'has_token' => isset($authResult['token'])
+        ]);
+
+        if (!isset($authResult['success']) || !$authResult['success']) {
+            throw new \Exception('Admin authentication failed');
+        }
+
+        // 2. Установка админского токена
+        $this->setUserToken($authResult['token']);
+        Log::info('Admin token set');
+
+        // 3. Поиск мастера по всем филиалам
+        Log::info('Searching for master in all companies');
         $masterInfo = $this->findMasterInCompanies($phone, true);
+
         if (!$masterInfo) {
             throw new \Exception('Мастер не найден в системе');
         }
 
-        // Загружаем фото через API Yclients
+        Log::info('Master found', [
+            'company_id' => $masterInfo['company']['id'],
+            'company_name' => $masterInfo['company']['title'],
+            'master_id' => $masterInfo['master']['id']
+        ]);
+
+        // 4. Загружаем фото
         $uploadResult = $this->uploadPhotoToYclients(
             $masterInfo['company']['id'],
             $masterInfo['master']['id'],
@@ -1490,11 +1520,6 @@ public function updateMasterPhoto($photoFile, string $phone): array
         if (!$uploadResult) {
             throw new \Exception('Ошибка при загрузке фото');
         }
-
-        Log::info('Photo successfully updated', [
-            'master_id' => $masterInfo['master']['id'],
-            'company_id' => $masterInfo['company']['id']
-        ]);
 
         return [
             'success' => true,
@@ -1511,73 +1536,314 @@ public function updateMasterPhoto($photoFile, string $phone): array
     }
 }
 
-
-
 private function uploadPhotoToYclients(int $companyId, int $staffId, $photoFile): bool
 {
+    $tempPath = null;
+    
     try {
-        Log::info('Starting photo upload to Yclients', [
+        Log::info('Начинаем обновление фото в Yclients', [
             'company_id' => $companyId,
             'staff_id' => $staffId
         ]);
 
-        // Создаем временный файл для отправки
-        $tempPath = sys_get_temp_dir() . '/' . uniqid('yclients_photo_') . '.jpg';
-        
-        // Создаем и оптимизируем изображение
-        $image = Image::make($photoFile);
-        
-        // Проверяем и корректируем ориентацию
-        if ($image->width() > $image->height()) {
-            $image->rotate(90);
-        }
-        
-        // Оптимизируем размер и качество
-        $image->fit(800, 1000, function ($constraint) {
-            $constraint->upsize();
-            $constraint->aspectRatio();
-        })->encode('jpg', 80)
-          ->save($tempPath);
-
-        Log::info('Photo processed and saved temporarily', [
-            'temp_path' => $tempPath,
-            'size' => filesize($tempPath)
-        ]);
-
-        // Отправляем файл в API Yclients
+        // Получаем текущие данные сотрудника
         $response = $this->http()
-            ->attach('file', file_get_contents($tempPath), 'photo.jpg')
-            ->post(self::API_BASE_URL . "/staff/{$companyId}/{$staffId}/photo");
+            ->get(self::API_BASE_URL . "/company/{$companyId}/staff/{$staffId}");
 
-        Log::info('Yclients API response received', [
-            'status' => $response->status(),
-            'has_content' => !empty($response->body())
+        $staffData = $response->json();
+        Log::info('Получены текущие данные сотрудника:', [
+            'success' => $staffData['success'] ?? false,
+            'has_data' => isset($staffData['data']),
+            'staff_name' => $staffData['data']['name'] ?? null,
         ]);
-
-        // Удаляем временный файл
-        if (file_exists($tempPath)) {
-            unlink($tempPath);
-            Log::info('Temporary file deleted');
+        
+        if (!isset($staffData['success']) || !$staffData['success'] || !isset($staffData['data'])) {
+            throw new \Exception('Не удалось получить данные сотрудника');
         }
 
-        $result = $this->handleResponse($response, 'uploadPhotoToYclients');
+        $currentStaff = $staffData['data'];
+
+        // Создаем временный файл для обработки изображения
+        $tempPath = storage_path('app/temp/' . uniqid('yclients_photo_') . '.jpg');
+        if (!is_dir(dirname($tempPath))) {
+            mkdir(dirname($tempPath), 0755, true);
+        }
         
-        return !empty($result);
+        Log::info('Создан временный файл:', ['path' => $tempPath]);
+        
+        // Обрабатываем изображение
+        $manager = new ImageManager(new Driver());
+        $image = $manager->read($photoFile);
+        
+        Log::info('Размеры оригинального изображения:', [
+            'width' => $image->width(),
+            'height' => $image->height()
+        ]);
+        
+        // Делаем изображение квадратным
+        $size = min($image->width(), $image->height());
+        $image->cover($size, $size);
+        
+        // Изменяем размер до требуемого
+        $image->resize(800, 800, function ($constraint) {
+            $constraint->aspectRatio();
+            $constraint->upsize();
+        });
+
+        // Сохраняем оптимизированное изображение
+        $image->toJpeg(80)->save($tempPath);
+        
+        // Конвертируем изображение в base64
+        $imageBase64 = base64_encode(file_get_contents($tempPath));
+        
+        // Формируем данные для обновления
+        $updateData = [
+            'name' => $currentStaff['name'],
+            'information' => $currentStaff['information'] ?? '',
+            'specialization' => $currentStaff['specialization'] ?? '',
+            'hidden' => $currentStaff['hidden'] ?? 0,
+            'fired' => $currentStaff['fired'] ?? 0,
+            'user_id' => $currentStaff['user_id'] ?? null,
+            'avatar' => 'data:image/jpeg;base64,' . $imageBase64
+        ];
+
+        Log::info('Отправляем запрос на обновление данных сотрудника');
+
+        // Отправляем PUT-запрос для обновления данных сотрудника
+        $updateResponse = $this->http()
+            ->put(self::API_BASE_URL . "/staff/{$companyId}/{$staffId}", $updateData);
+
+        Log::info('Получен ответ на обновление:', [
+            'status' => $updateResponse->status(),
+            'body' => $updateResponse->json()
+        ]);
+
+        if (!$updateResponse->successful()) {
+            throw new \Exception('Не удалось обновить данные сотрудника: ' . $updateResponse->body());
+        }
+
+        return true;
 
     } catch (\Exception $e) {
-        Log::error('Error uploading photo to Yclients:', [
+        Log::error('Ошибка при обновлении фото в Yclients:', [
             'error' => $e->getMessage(),
             'company_id' => $companyId,
             'staff_id' => $staffId,
             'trace' => $e->getTraceAsString()
         ]);
 
-        // Убеждаемся, что временный файл удален
-        if (isset($tempPath) && file_exists($tempPath)) {
+        throw $e;
+
+    } finally {
+        // Удаляем временный файл
+        if ($tempPath && file_exists($tempPath)) {
             unlink($tempPath);
+            Log::info('Временный файл удален', ['path' => $tempPath]);
+        }
+    }
+}
+
+private function getAuthorizationHeader(): string
+{
+    $partnerToken = config('services.yclients.token');
+    $userToken = $this->userToken;
+    
+    return "Bearer {$partnerToken}" . ($userToken ? ", User {$userToken}" : '');
+}
+
+public function getMasterPhoto(int $companyId, int $staffId): ?string 
+{
+    try {
+        Log::info('Getting master photo', [
+            'company_id' => $companyId,
+            'staff_id' => $staffId
+        ]);
+
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/staff/{$staffId}");
+
+        $data = $this->handleResponse($response, 'getMasterPhoto');
+
+        if (!$data) {
+            Log::warning('No data received from Yclients for master photo');
+            return null;
         }
 
-        throw $e;
+        // В ответе API будет поле avatar_big с полным URL фото
+        $photoUrl = $data['avatar_big'] ?? null;
+
+        Log::info('Master photo URL retrieved', [
+            'has_photo' => !empty($photoUrl),
+            'url' => $photoUrl
+        ]);
+
+        return $photoUrl;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting master photo from Yclients:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'company_id' => $companyId,
+            'staff_id' => $staffId
+        ]);
+        return null;
+    }
+}
+
+public function createStaff(int $companyId, array $staffData): ?array
+{
+    try {
+        // Авторизация админа
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        Log::info('Authenticating with Yclients admin');
+        $authResult = $this->authenticateByCredentials($adminLogin, $adminPassword);
+        if (!$authResult['success']) {
+            throw new \Exception('Failed to authenticate with Yclients: ' . ($authResult['message'] ?? 'Unknown error'));
+        }
+
+        Log::info('Authentication successful, token received');
+        $this->setUserToken($authResult['token']);
+
+        // Форматируем данные в соответствии с требованиями API
+        $formattedData = [
+            'name' => $staffData['name'],
+            'specialization' => $staffData['specialization'],
+            'position_id' => null,  // API требует null
+            'phone_number' => $staffData['phone_number'],
+            'user_phone' => $staffData['phone_number'],  // добавляем требуемое поле
+            'user_email' => $staffData['email'],  // используем email из staffData
+            'is_user_invite' => false  // добавляем требуемое поле
+        ];
+
+        Log::info('Sending request to Yclients:', [
+            'url' => self::API_BASE_URL . "/company/{$companyId}/staff/quick",
+            'data' => $formattedData
+        ]);
+
+        try {
+            $response = $this->http()
+                ->post(self::API_BASE_URL . "/company/{$companyId}/staff/quick", $formattedData);
+
+            $responseData = $response->json();
+            Log::info('Yclients API response:', [
+                'status' => $response->status(),
+                'body' => $responseData
+            ]);
+
+            if ($response->status() === 422) {
+                Log::error('Validation error from Yclients:', [
+                    'errors' => $responseData['meta']['errors'] ?? $responseData
+                ]);
+                throw new \Exception('Validation error: ' . json_encode($responseData));
+            }
+
+            if (!isset($responseData['success']) || !$responseData['success']) {
+                throw new \Exception('API error: ' . json_encode($responseData));
+            }
+
+            return [
+                'success' => true,
+                'data' => $responseData['data']
+            ];
+
+        } catch (\Illuminate\Http\Client\RequestException $e) {
+            Log::error('Request exception:', [
+                'status' => $e->response->status(),
+                'body' => $e->response->json() ?? $e->response->body()
+            ]);
+            throw $e;
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Exception in createStaff:', [
+            'message' => $e->getMessage(),
+            'company_id' => $companyId,
+            'staff_data' => $formattedData ?? $staffData,
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+public function sendUserInvite(int $companyId, string $phone, string $email): bool
+{
+    try {
+        Log::info('Sending user invite', [
+            'company_id' => $companyId,
+            'phone' => $phone,
+            'email' => $email
+        ]);
+
+        // Авторизуемся как админ
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        $authResult = $this->authenticateByCredentials($adminLogin, $adminPassword);
+        if (!isset($authResult['success']) || !$authResult['success']) {
+            Log::error('Failed to authenticate as admin for sending invite');
+            return false;
+        }
+
+        $this->setUserToken($authResult['token']);
+
+        // Форматируем телефон
+        $phoneNumber = preg_replace('/[^0-9]/', '', $phone);
+        if (strlen($phoneNumber) === 11) {
+            $phoneNumber = substr($phoneNumber, 1);
+        }
+
+        // Формируем данные для приглашения
+        $payload = [
+            'invites' => [
+                [
+                    'phone' => $phoneNumber,
+                    'email' => $email,
+                    'role_id' => 2,
+                    'name' => 'Мастер',
+                    'rights' => [
+                        'is_employee' => true,
+                        'master_priority' => 0,
+                        'has_access_to_pos' => false,
+                        'has_access_to_finances' => false,
+                        'position_id' => null
+                    ],
+                    'is_employee' => true,
+                    'search' => $phoneNumber // Добавляем поле search с номером телефона
+                ]
+            ],
+            'company_id' => $companyId // Добавляем ID компании на верхний уровень
+        ];
+
+        Log::info('Sending invite with payload:', ['payload' => $payload]);
+
+        $response = $this->http()
+            ->post(self::API_BASE_URL . "/user/invite/{$companyId}", $payload);
+
+        $result = $response->json();
+        
+        Log::info('Invite response:', [
+            'status' => $response->status(),
+            'response' => $result
+        ]);
+
+        return isset($result['success']) && $result['success'];
+
+    } catch (\Exception $e) {
+        if ($e instanceof \Illuminate\Http\Client\RequestException) {
+            Log::error('Full error response from Yclients:', [
+                'error' => $e->getMessage(),
+                'response' => $e->response->json(),
+                'status' => $e->response->status()
+            ]);
+        }
+        
+        Log::error('Error sending user invite:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return false;
     }
 }
 
@@ -1911,6 +2177,117 @@ public function getServices(int $companyId, int $staffId = null): ?array
 
     } catch (\Exception $e) {
         Log::error('Error getting services:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+public function getProducts(int $companyId): ?array
+{
+    try {
+        Log::info('Getting products for company', [
+            'company_id' => $companyId
+        ]);
+
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/goods/{$companyId}");
+
+        $data = $this->handleResponse($response, 'getProducts');
+        
+        // Логируем результат
+        Log::info('Products response', [
+            'status' => $response->status(),
+            'has_data' => !empty($data),
+            'products_count' => count($data ?? [])
+        ]);
+
+        if (!$data) {
+            return null;
+        }
+
+        // Форматируем ответ
+        return [
+            'success' => true,
+            'data' => array_map(function($product) {
+                return [
+                    'good_id' => $product['good_id'],
+                    'title' => $product['title'],
+                    'actual_amounts' => $product['actual_amounts'] ?? []
+                ];
+            }, $data)
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Failed to get products', [
+            'company_id' => $companyId,
+            'error' => $e->getMessage()
+        ]);
+        return null;
+    }
+}
+
+/**
+ * Получить расчет зарплаты мастера
+ *
+ * @param int $companyId ID компании
+ * @param int $staffId ID сотрудника
+ * @param string $dateFrom Дата начала в формате Y-m-d
+ * @param string $dateTo Дата окончания в формате Y-m-d
+ * @return array|null
+ */
+public function getMasterSalary(int $companyId, int $staffId, string $dateFrom, string $dateTo): ?array
+{
+    try {
+        $url = self::API_BASE_URL . "/company/{$companyId}/salary/period/staff/{$staffId}";
+        
+        $params = [
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo
+        ];
+
+        Log::info('Making salary request to YClients', [
+            'url' => $url,
+            'params' => $params
+        ]);
+
+        $response = $this->http()->get($url, $params);
+        $result = $response->json();
+
+        Log::info('Raw YClients salary response', [
+            'response' => $result
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Failed to get salary data', [
+                'status' => $response->status(),
+                'response' => $result
+            ]);
+            return null;
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'salary' => [
+                    'services_total' => (float) $result['data']['services_sum'],
+                    'products_total' => (float) $result['data']['goods_sales_sum'],
+                    'total' => (float) $result['data']['salary'],
+                    'services_count' => $result['data']['services_count'],
+                    'products_count' => $result['data']['goods_sales_count'],
+                    'working_days' => $result['data']['working_days_count'],
+                    'working_hours' => $result['data']['working_hours_count']
+                ],
+                'period' => [
+                    'from' => $dateFrom,
+                    'to' => $dateTo
+                ]
+            ]
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Error getting master salary:', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ]);

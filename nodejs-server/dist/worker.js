@@ -322,6 +322,170 @@ class LaravelService {
         }
         this.laravelApiUrl = apiUrl;
     }
+    async getTasks(params) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/admin-tasks`, { params });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error fetching tasks:', error);
+            throw error;
+        }
+    }
+    async sendTaskNotificationToAdmin(taskId) {
+        try {
+            // Отправляем уведомление через NodeJS API
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-notifications/send`, {
+                task_id: taskId,
+                type: 'new_task'
+            });
+        }
+        catch (error) {
+            console.error('Error sending notification to admin:', error);
+        }
+    }
+    async getMasterPhoto(phone) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/get-photo`, {
+                phone: phone
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting master photo:', error);
+            return {
+                success: false,
+                message: 'Ошибка при получении фото мастера'
+            };
+        }
+    }
+    async getTaskById(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/admin-tasks/${id}`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error fetching task:', error);
+            throw error;
+        }
+    }
+    async completeTask(taskId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-tasks/${taskId}/complete`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error completing task:', error);
+            throw error;
+        }
+    }
+    async updateTaskStatus(taskId, status) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/admin-tasks/${taskId}/status`, { status });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating task status:', error);
+            throw error;
+        }
+    }
+    async createTaskForMaster({ type, masterPhone, masterName, description = null }) {
+        try {
+            // Формируем заголовок в зависимости от типа задачи
+            const titles = {
+                'description_update': `Обновить описание мастера ${masterName}`,
+                'photo_update': `Обновить фото мастера ${masterName}`,
+                'schedule_update': `Обновить расписание мастера ${masterName}`
+            };
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-tasks`, {
+                type,
+                master_phone: masterPhone,
+                master_name: masterName,
+                description,
+                title: titles[type]
+            });
+            if (response.data.success && response.data.data) {
+                // Отправляем уведомление админам
+                await this.sendAdminNotification(response.data.data.id, type);
+            }
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error creating task for master:', error);
+            throw error;
+        }
+    }
+    async sendAdminNotification(taskId, type) {
+        try {
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-notifications/send`, {
+                task_id: taskId,
+                type: type
+            });
+        }
+        catch (error) {
+            console.error('Error sending admin notification:', error);
+            // Не выбрасываем ошибку, чтобы не прерывать основной процесс
+        }
+    }
+    async getMasterByPhone(phone) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/info`, { phone });
+            if (response.data.success) {
+                return {
+                    name: response.data.data.name,
+                    id: response.data.data.id
+                };
+            }
+            return null;
+        }
+        catch (error) {
+            console.error('Error getting master info:', error);
+            return null;
+        }
+    }
+    async deleteTask(taskId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default()["delete"](`${this.laravelApiUrl}/admin-tasks/${taskId}`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error deleting task:', error);
+            throw error;
+        }
+    }
+    // Метод для изменения приоритета задачи
+    async updateTaskPriority(taskId, priority) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/admin-tasks/${taskId}/priority`, { priority });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating task priority:', error);
+            throw error;
+        }
+    }
+    // Метод для добавления комментария к задаче
+    async addTaskComment(taskId, comment) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-tasks/${taskId}/comments`, { comment });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error adding task comment:', error);
+            throw error;
+        }
+    }
+    // Метод для обновления дедлайна задачи
+    async updateTaskDeadline(taskId, deadline) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/admin-tasks/${taskId}/deadline`, { deadline });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating task deadline:', error);
+            throw error;
+        }
+    }
     /**
      * Retrieves a user by their Telegram ID.
      * Utilizes CacheService.rememberCacheValue for caching.
@@ -341,6 +505,80 @@ class LaravelService {
         catch (error) {
             console.error('Error fetching user:', error);
             return null;
+        }
+    }
+    // Создание уведомления об остатках
+    async createWarehouseNotification(telegramId, data) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/warehouse-notifications`, {
+                telegram_id: telegramId,
+                product_id: data.productId,
+                min_amount: data.minAmount,
+                branch_id: data.branchId // Добавляем branch_id
+            });
+            if (!response.data.success) {
+                throw new Error('Failed to create warehouse notification');
+            }
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Error creating warehouse notification:', error);
+            throw error;
+        }
+    }
+    async getWarehouseNotification(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/warehouse-notifications/${id}`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting single warehouse notification:', error);
+            return null;
+        }
+    }
+    // Получение списка уведомлений
+    async getWarehouseNotifications(telegramId, branchId = null, page = 1, perPage = 10) {
+        try {
+            console.log('Fetching warehouse notifications:', { telegramId, branchId, page, perPage });
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/warehouse-notifications`, {
+                params: {
+                    telegram_id: telegramId,
+                    branch_id: branchId,
+                    page,
+                    per_page: perPage
+                }
+            });
+            console.log('Warehouse notifications response:', response.data);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting warehouse notifications:', error);
+            return null;
+        }
+    }
+    // Обновление уведомления
+    async updateWarehouseNotification(id, data) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/warehouse-notifications/${id}`, data);
+            // Если получили ответ с данными - значит запрос успешен
+            return {
+                success: true,
+                data: response.data
+            };
+        }
+        catch (error) {
+            throw new Error('Failed to update notification');
+        }
+    }
+    // Удаление уведомления
+    async deleteWarehouseNotification(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default()["delete"](`${this.laravelApiUrl}/warehouse-notifications/${id}`);
+            return response.data.success || false;
+        }
+        catch (error) {
+            console.error('Error deleting warehouse notification:', error);
+            throw error;
         }
     }
     /**
@@ -365,16 +603,94 @@ class LaravelService {
             return null;
         }
     }
-    async createNotificationByTelegramId(telegramId, settings, type = 'notification') {
+    async rescheduleNotification(notificationId, newDateTime) {
         try {
-            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/notifications/telegram/${telegramId}`, {
-                settings: Object.assign(Object.assign({}, settings), { type })
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().patch(`${this.laravelApiUrl}/admin-notifications/${notificationId}/reschedule`, {
+                notification_datetime: newDateTime
             });
             return response.data;
         }
         catch (error) {
+            console.error('Error rescheduling notification:', error);
+            throw error;
+        }
+    }
+    async createNotificationByTelegramId(telegramId, settings) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-notifications`, {
+                telegram_id: telegramId,
+                name: settings.name,
+                sum: settings.sum,
+                notification_datetime: this.formatDateTime(settings.dateTime),
+                type: settings.type,
+                frequency: settings.frequency,
+                frequency_value: settings.frequency_value,
+                is_active: true
+            });
+            if (!response.data.success) {
+                throw new Error('Failed to create notification');
+            }
+            return response.data;
+        }
+        catch (error) {
             console.error('Error creating notification:', error);
-            throw new Error('Error creating notification');
+            throw error;
+        }
+    }
+    // Вспомогательный метод для форматирования даты и времени
+    formatDateTime(dateTimeStr) {
+        const [date, time] = dateTimeStr.split(' ');
+        const [day, month, year] = date.split('.');
+        return `${year}-${month}-${day} ${time}:00`;
+    }
+    // Получение списка уведомлений
+    async getAdminNotifications(telegramId, page = 1, perPage = 10) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/admin-notifications`, {
+                params: {
+                    telegram_id: telegramId,
+                    page,
+                    per_page: perPage
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting admin notifications:', error);
+            return null;
+        }
+    }
+    // Получение конкретного уведомления
+    async getAdminNotification(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/admin-notifications/${id}`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting admin notification:', error);
+            return null;
+        }
+    }
+    // Обновление уведомления
+    async updateAdminNotification(id, settings) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().put(`${this.laravelApiUrl}/admin-notifications/${id}`, settings);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error updating admin notification:', error);
+            throw error;
+        }
+    }
+    // Удаление уведомления
+    async deleteAdminNotification(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default()["delete"](`${this.laravelApiUrl}/admin-notifications/${id}`);
+            return response.data.success || false;
+        }
+        catch (error) {
+            console.error('Error deleting admin notification:', error);
+            throw error;
         }
     }
     async updateNotificationById(notificationId, settings) {
@@ -506,16 +822,16 @@ class LaravelService {
     async getProductsByTelegramId(telegramId, page = 1, perPage = 10) {
         const cacheKey = `products_telegram_id_${telegramId}`;
         try {
-            // Fetch products from cache or API
-            const products = await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].rememberCacheValue(cacheKey, () => this.fetchProductsFromApi(telegramId), 3600 * 24 // Cache expiration set to 24 hours (86400 seconds)
-            );
-            // Paginate products
+            // Получаем данные из кэша или API
+            const response = await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].rememberCacheValue(cacheKey, () => this.fetchProductsFromApi(telegramId), 3600 * 24);
+            // Извлекаем массив продуктов из поля data
+            const products = Array.isArray(response === null || response === void 0 ? void 0 : response.data) ? response.data : [];
+            // Пагинация
             const totalProducts = products.length;
             const totalPages = Math.ceil(totalProducts / perPage);
-            page = Math.max(1, Math.min(totalPages, page));
+            page = Math.max(1, Math.min(totalPages || 1, page));
             const start = (page - 1) * perPage;
             const currentProducts = products.slice(start, start + perPage);
-            // Prepare response with pagination details
             return {
                 actual_amounts: undefined,
                 currentPage: page,
@@ -526,34 +842,77 @@ class LaravelService {
         }
         catch (error) {
             console.error('Error fetching products:', error);
-            return null;
+            return {
+                actual_amounts: undefined,
+                currentPage: 1,
+                totalPages: 0,
+                products: [],
+                allProducts: []
+            };
         }
     }
     async getTaskByTelegramId(telegramId, page = 1, perPage = 10) {
         const cacheKey = `task_telegram_id_${telegramId}`;
         try {
-            // Fetch products from cache or API
-            const tasks = await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].rememberCacheValue(cacheKey, () => this.fetchTasksFromApi(telegramId), 10 // Cache expiration set to 24 hours (86400 seconds)
-            );
-            // Paginate products
+            // Получаем задачи из кеша или API с правильной типизацией
+            const response = await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].rememberCacheValue(cacheKey, () => this.fetchTasksFromApi(telegramId), 10);
+            if (!response || !Array.isArray(response.data)) {
+                return this.createEmptyResponse(page, perPage);
+            }
+            // Пагинация
+            const tasks = response.data;
             const totalTasks = tasks.length;
-            const totalPages = Math.ceil(totalTasks / perPage);
-            page = Math.max(1, Math.min(totalPages, page));
-            const start = (page - 1) * perPage;
+            const totalPages = Math.max(1, Math.ceil(totalTasks / perPage));
+            const validPage = Math.max(1, Math.min(totalPages, page));
+            const start = (validPage - 1) * perPage;
             const currentTasks = tasks.slice(start, start + perPage);
-            // Prepare response with pagination details
+            // Возвращаем данные в формате TaskPaginatedResponse
             return {
-                actual_amounts: undefined,
-                currentPage: page,
-                totalPages,
-                tasks: currentTasks,
-                allTasks: tasks
+                success: true,
+                data: {
+                    current_page: validPage,
+                    data: currentTasks,
+                    total: totalTasks,
+                    per_page: perPage
+                },
+                meta: {
+                    total: totalTasks
+                }
             };
         }
         catch (error) {
-            console.error('Error fetching tasks:', error);
-            return null;
+            console.error('Error fetching tasks:', {
+                error,
+                telegram_id: telegramId,
+                page,
+                per_page: perPage
+            });
+            return this.createEmptyResponse(page, perPage);
         }
+    }
+    // Вспомогательный метод для создания пустого ответа
+    createEmptyResponse(page, perPage) {
+        return {
+            success: false,
+            data: {
+                current_page: page,
+                data: [],
+                total: 0,
+                per_page: perPage
+            },
+            meta: {
+                total: 0
+            }
+        };
+    }
+    // Типизированный метод для получения задач из API
+    async fetchTasksFromApi(telegramId) {
+        const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/tasks`, {
+            params: {
+                telegram_id: telegramId
+            }
+        });
+        return response.data;
     }
     async closeTask(taskId, telegramId) {
         try {
@@ -566,20 +925,6 @@ class LaravelService {
         catch (error) {
             console.error('Error closing task:', error);
             throw new Error('Error closing task');
-        }
-    }
-    async getTaskById(telegramId, task_id) {
-        const cacheKey = `task_telegram_id_${telegramId}_task_id_${task_id}`;
-        try {
-            // Fetch products from cache or API
-            const task = await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].rememberCacheValue(cacheKey, () => this.fetchTasksFromApi(telegramId, task_id), 10 // Cache expiration set to 24 hours (86400 seconds)
-            );
-            // Prepare response with pagination details
-            return task;
-        }
-        catch (error) {
-            console.error('Error fetching tasks:', error);
-            return null;
         }
     }
     async getOneProductByTelegramId(telegramId, product_id) {
@@ -600,6 +945,7 @@ class LaravelService {
         try {
             if (product_id === null) {
                 const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/yclients/goods/${telegramId}`);
+                // Возвращаем весь ответ, так как нам нужна структура с полями success, data, meta
                 return response.data;
             }
             else {
@@ -610,22 +956,6 @@ class LaravelService {
         catch (error) {
             console.error('Error fetching products:', error);
             throw new Error('Error fetching products');
-        }
-    }
-    async fetchTasksFromApi(telegramId, task_id = null) {
-        try {
-            if (task_id === null) {
-                const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/tasks?telegram_id=${telegramId}`);
-                return response.data;
-            }
-            else {
-                const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/tasks?telegram_id=${telegramId}&task_id=${task_id}`);
-                return response.data;
-            }
-        }
-        catch (error) {
-            console.error('Error fetching tasks:', error);
-            throw new Error('Error fetching tasks');
         }
     }
     async getUsersByTelegramId(telegramId, page = 1, perPage = 10) {
@@ -668,8 +998,14 @@ class LaravelService {
             return null;
         }
     }
+    getHeaders() {
+        return {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+    }
     async submitRegistration(data) {
-        var _a;
+        var _a, _b, _c, _d, _e, _f;
         try {
             const formattedData = {
                 full_name: data.fullName,
@@ -694,6 +1030,10 @@ class LaravelService {
                 education_cert_photo: data.educationCertPhoto,
                 is_self_employed: data.isSelfEmployed,
                 master_price: data.masterPrice, // Добавляем поле master_price
+                work_address: (_b = data.selectedBranch) === null || _b === void 0 ? void 0 : _b.address, // Добавляем адрес филиала
+                branch_name: (_c = data.selectedBranch) === null || _c === void 0 ? void 0 : _c.name, // Добавляем название филиала
+                branch_id: (_d = data.selectedBranch) === null || _d === void 0 ? void 0 : _d.id, // Добавляем ID филиала
+                telegram_id: data.telegram_id, // Добавляем telegram_id
                 status: 'pending'
             };
             const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations`, formattedData, {
@@ -702,6 +1042,27 @@ class LaravelService {
                     'Content-Type': 'application/json'
                 }
             });
+            // Если регистрация успешна, отправляем уведомление
+            if (((_e = response.data) === null || _e === void 0 ? void 0 : _e.success) || response.status === 201) {
+                try {
+                    await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin-notifications/employment`, {
+                        registration_id: response.data.data.id,
+                        type: 'new_registration'
+                    }, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                }
+                catch (notificationError) {
+                    console.error('Error sending registration notification:', {
+                        error: notificationError,
+                        registrationId: response.data.data.id,
+                        response: (_f = notificationError.response) === null || _f === void 0 ? void 0 : _f.data
+                    });
+                }
+            }
             return response.data;
         }
         catch (error) {
@@ -750,6 +1111,133 @@ class LaravelService {
             throw error;
         }
     }
+    async getActiveRegistrations() {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/employee-registrations/pending`, {
+                headers: this.getHeaders()
+            });
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Error fetching active registrations:', error);
+            throw error;
+        }
+    }
+    async getRegistrationDetails(id) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/employee-registrations/${id}`, {
+                headers: this.getHeaders()
+            });
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Error fetching registration details:', error);
+            throw error;
+        }
+    }
+    async sendEmploymentInvite(registrationId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${registrationId}/send-invite`, {}, {
+                headers: this.getHeaders()
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error sending employment invite:', error);
+            throw error;
+        }
+    }
+    async getMasterSalary(telegramId, startDate, endDate) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/salary/master`, // Исправленный URL
+            {
+                params: {
+                    telegram_id: telegramId,
+                    start_date: startDate,
+                    end_date: endDate
+                }
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting master salary:', error);
+            throw error;
+        }
+    }
+    static async exportSalaryReport() {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default()({
+                url: `${process.env.LARAVEL_API_URL}/salary/export`,
+                method: 'GET',
+                responseType: 'arraybuffer'
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error exporting salary:', error);
+            throw error;
+        }
+    }
+    async createStaffProfile(registrationId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${registrationId}/create-staff-after-invite`, {}, {
+                headers: this.getHeaders()
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error creating staff profile:', error);
+            throw error;
+        }
+    }
+    async getRegistrationDocuments(id) {
+        try {
+            console.log('Fetching documents for registration:', id);
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/employee-registrations/${id}/documents`, {
+                headers: this.getHeaders()
+            });
+            console.log('Documents response:', response.data);
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Error fetching registration documents:', error);
+            throw error;
+        }
+    }
+    async getMasterDocumentsByPhone(phone) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/master/documents/${phone}`, {
+                headers: this.getHeaders()
+            });
+            return response.data.data;
+        }
+        catch (error) {
+            console.error('Error fetching master documents:', error);
+            throw error;
+        }
+    }
+    async approveRegistration(id) {
+        try {
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${id}/approve`, {}, {
+                headers: this.getHeaders()
+            });
+        }
+        catch (error) {
+            console.error('Error approving registration:', error);
+            throw error;
+        }
+    }
+    async rejectRegistration(id) {
+        try {
+            await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${id}/reject`, {}, {
+                headers: this.getHeaders()
+            });
+        }
+        catch (error) {
+            console.error('Error rejecting registration:', error);
+            throw error;
+        }
+    }
     async logout(telegramId) {
         try {
             // Очищаем токен в Redis через бэкенд
@@ -766,6 +1254,18 @@ class LaravelService {
             const cacheKey = `user_telegram_id_${telegramId}`;
             await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_1__["default"].forget(cacheKey);
             // Не пробрасываем ошибку дальше, просто логируем
+        }
+    }
+    async getBranchYclientsId(branchId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/branches/${branchId}/yclients-id`, {
+                headers: this.getHeaders()
+            });
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error fetching branch yclients_id:', error);
+            throw error;
         }
     }
     async updateMasterDescription(phone, password, description) {
@@ -887,12 +1387,12 @@ class LaravelService {
             throw error;
         }
     }
-    // В LaravelService добавляем новый метод:
     async uploadSignedDocuments(registrationId, files) {
+        var _a;
         try {
             const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/employee-registrations/${registrationId}/upload-signed-documents`, {
                 files,
-                status: 'documents_uploaded' // Обновляем статус регистрации
+                status: 'documents_uploaded'
             }, {
                 headers: {
                     'Accept': 'application/json',
@@ -902,7 +1402,11 @@ class LaravelService {
             return response.data;
         }
         catch (error) {
-            console.error('Error uploading signed documents:', error);
+            console.error('Error uploading signed documents:', {
+                error,
+                registrationId,
+                response: (_a = error.response) === null || _a === void 0 ? void 0 : _a.data
+            });
             throw error;
         }
     }
@@ -1031,19 +1535,70 @@ class LaravelService {
             return false;
         }
     }
-    async updateMasterPhoto(telegramId, photoPath) {
+    async updateMasterPhoto(phone, photoPath) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         try {
+            console.log('Starting master photo update:', {
+                phone,
+                photoPath
+            });
+            // Проверяем существование файла
+            if (!node_fs__WEBPACK_IMPORTED_MODULE_3__.existsSync(photoPath)) {
+                throw new Error('Photo file not found');
+            }
+            // Создаем FormData и добавляем файл и телефон
             const form = new (form_data__WEBPACK_IMPORTED_MODULE_2___default())();
             form.append('photo', node_fs__WEBPACK_IMPORTED_MODULE_3__.createReadStream(photoPath));
-            form.append('telegram_id', telegramId.toString());
+            form.append('phone', phone);
             const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/masters/update-photo`, form, {
-                headers: Object.assign({}, form.getHeaders())
+                headers: Object.assign({}, form.getHeaders()),
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
             });
-            return response.data;
+            console.log('Full update photo response:', {
+                status: response.status,
+                data: response.data
+            });
+            if (response.data) {
+                return response.data; // Возвращаем полный объект ответа
+            }
+            throw new Error('Invalid response format');
         }
         catch (error) {
-            console.error('Error updating master photo:', error);
-            throw error;
+            // Расширенное логирование ошибки
+            console.error('Error updating master photo:', {
+                errorMessage: error === null || error === void 0 ? void 0 : error.message,
+                errorResponse: {
+                    status: (_a = error === null || error === void 0 ? void 0 : error.response) === null || _a === void 0 ? void 0 : _a.status,
+                    statusText: (_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.statusText,
+                    data: (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data
+                },
+                requestData: {
+                    phone,
+                    photoPath,
+                    url: `${this.laravelApiUrl}/masters/update-photo`
+                }
+            });
+            // Формируем объект ответа с ошибкой
+            const errorResponse = {
+                success: false,
+                message: 'Не удалось обновить фото',
+                error: error === null || error === void 0 ? void 0 : error.message
+            };
+            // Добавляем специфические ошибки
+            if (((_d = error === null || error === void 0 ? void 0 : error.response) === null || _d === void 0 ? void 0 : _d.status) === 401) {
+                errorResponse.message = 'Ошибка авторизации';
+            }
+            else if (((_e = error === null || error === void 0 ? void 0 : error.response) === null || _e === void 0 ? void 0 : _e.status) === 404) {
+                errorResponse.message = 'Мастер не найден в системе';
+            }
+            else if (((_f = error === null || error === void 0 ? void 0 : error.response) === null || _f === void 0 ? void 0 : _f.status) === 413) {
+                errorResponse.message = 'Файл слишком большой';
+            }
+            else if ((_h = (_g = error === null || error === void 0 ? void 0 : error.response) === null || _g === void 0 ? void 0 : _g.data) === null || _h === void 0 ? void 0 : _h.message) {
+                errorResponse.message = error.response.data.message;
+            }
+            return errorResponse; // Возвращаем объект с информацией об ошибке
         }
     }
     async getMasterRecords({ phone, password, params }) {
@@ -1224,6 +1779,26 @@ class LaravelService {
                 (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
         }
     }
+    async getCompanies() {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/companies`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting companies:', error);
+            return null;
+        }
+    }
+    async getProducts(companyId) {
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/products/${companyId}`);
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error getting products:', error);
+            return null;
+        }
+    }
 }
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (new LaravelService());
 
@@ -1243,24 +1818,27 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _services_warehouseBot__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../services/warehouseBot */ "./src/telegraf/services/warehouseBot.ts");
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-/* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @telegraf/session/redis */ "@telegraf/session/redis");
-/* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminMainScene */ "./src/telegraf/services/bot-admin/scenes/adminMainScene.ts");
-/* harmony import */ var _services_scenes_tasks_tasksScene__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/scenes/tasks/tasksScene */ "./src/telegraf/services/scenes/tasks/tasksScene.ts");
-/* harmony import */ var _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../services/scenes/salary/salaryScene */ "./src/telegraf/services/scenes/salary/salaryScene.ts");
-/* harmony import */ var _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsScene */ "./src/telegraf/services/scenes/notifications/notificationsScene.ts");
-/* harmony import */ var _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../services/scenes/employment/employmentScene */ "./src/telegraf/services/scenes/employment/employmentScene.ts");
-/* harmony import */ var _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../services/scenes/warehouse/warehouseScene */ "./src/telegraf/services/scenes/warehouse/warehouseScene.ts");
-/* harmony import */ var _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../services/scenes/staff/staffScene */ "./src/telegraf/services/scenes/staff/staffScene.ts");
-/* harmony import */ var _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminLoginWizard */ "./src/telegraf/services/bot-admin/scenes/adminLoginWizard.ts");
-/* harmony import */ var _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../services/scenes/notifications/createNotificationScene */ "./src/telegraf/services/scenes/notifications/createNotificationScene.ts");
-/* harmony import */ var _services_scenes_notifications_notificationsListScene__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsListScene */ "./src/telegraf/services/scenes/notifications/notificationsListScene.ts");
-/* harmony import */ var _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../services/scenes/notifications/editNotificationScene */ "./src/telegraf/services/scenes/notifications/editNotificationScene.ts");
-/* harmony import */ var _services_scenes_warehouse_createNotificationScene__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../services/scenes/warehouse/createNotificationScene */ "./src/telegraf/services/scenes/warehouse/createNotificationScene.ts");
-/* harmony import */ var _services_scenes_warehouse_editNotificationScene__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../services/scenes/warehouse/editNotificationScene */ "./src/telegraf/services/scenes/warehouse/editNotificationScene.ts");
-
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @telegraf/session/redis */ "@telegraf/session/redis");
+/* harmony import */ var _telegraf_session_redis__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminMainScene */ "./src/telegraf/services/bot-admin/scenes/adminMainScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_salaryScene__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../services/bot-admin/scenes/salaryScene */ "./src/telegraf/services/bot-admin/scenes/salaryScene.ts");
+/* harmony import */ var _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../services/scenes/notifications/notificationsScene */ "./src/telegraf/services/scenes/notifications/notificationsScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_employmentScene__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../services/bot-admin/scenes/employmentScene */ "./src/telegraf/services/bot-admin/scenes/employmentScene.ts");
+/* harmony import */ var _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../services/scenes/staff/staffScene */ "./src/telegraf/services/scenes/staff/staffScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../services/bot-admin/scenes/adminLoginWizard */ "./src/telegraf/services/bot-admin/scenes/adminLoginWizard.ts");
+/* harmony import */ var _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../services/scenes/notifications/createNotificationScene */ "./src/telegraf/services/scenes/notifications/createNotificationScene.ts");
+/* harmony import */ var _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../services/scenes/notifications/editNotificationScene */ "./src/telegraf/services/scenes/notifications/editNotificationScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_selectBranchScene__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../services/bot-admin/scenes/selectBranchScene */ "./src/telegraf/services/bot-admin/scenes/selectBranchScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_productsScene__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../services/bot-admin/scenes/productsScene */ "./src/telegraf/services/bot-admin/scenes/productsScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_createWarehouseNotificationScene__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../services/bot-admin/scenes/createWarehouseNotificationScene */ "./src/telegraf/services/bot-admin/scenes/createWarehouseNotificationScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_warehouseScene__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../services/bot-admin/scenes/warehouseScene */ "./src/telegraf/services/bot-admin/scenes/warehouseScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_warehouseNotificationsListScene__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../services/bot-admin/scenes/warehouseNotificationsListScene */ "./src/telegraf/services/bot-admin/scenes/warehouseNotificationsListScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_notificationsManagementScene__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../services/bot-admin/scenes/notificationsManagementScene */ "./src/telegraf/services/bot-admin/scenes/notificationsManagementScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_notificationsCreateScene__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../services/bot-admin/scenes/notificationsCreateScene */ "./src/telegraf/services/bot-admin/scenes/notificationsCreateScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_remindLaterScene__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../services/bot-admin/scenes/remindLaterScene */ "./src/telegraf/services/bot-admin/scenes/remindLaterScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_notificationsListScene__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ../services/bot-admin/scenes/notificationsListScene */ "./src/telegraf/services/bot-admin/scenes/notificationsListScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_tasksScene__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ../services/bot-admin/scenes/tasksScene */ "./src/telegraf/services/bot-admin/scenes/tasksScene.ts");
 
 
 
@@ -1271,42 +1849,52 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-
-
 // Импорты сцен уведомлений
 
 
+// Импорты сцен склад
 
-// Импорты сцен склада
+
+
+
+
+
+
+
 
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN_SUPPLIES_NEW;
 const bot = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Telegraf(botToken);
-const warehouseBot = new _services_warehouseBot__WEBPACK_IMPORTED_MODULE_1__["default"](bot);
-const store = (0,_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_3__.Redis)({
+const store = (0,_telegraf_session_redis__WEBPACK_IMPORTED_MODULE_2__.Redis)({
     url: 'redis://redis:6379/2',
 });
 // Инициализация stage со всеми сценами
 const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
-    _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_11__.adminLoginWizard,
-    _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_4__.adminMainScene,
-    _services_scenes_tasks_tasksScene__WEBPACK_IMPORTED_MODULE_5__.tasksScene,
-    _services_scenes_salary_salaryScene__WEBPACK_IMPORTED_MODULE_6__.salaryScene,
-    _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_7__.notifictationsScene,
-    _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_12__.createNotifictationScene,
-    _services_scenes_notifications_notificationsListScene__WEBPACK_IMPORTED_MODULE_13__.notificationsListScene,
-    _services_scenes_employment_employmentScene__WEBPACK_IMPORTED_MODULE_8__.employmentScene,
-    _services_scenes_warehouse_warehouseScene__WEBPACK_IMPORTED_MODULE_9__.warehouseScene,
-    _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_10__.staffScene,
-    _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_14__.editNotificationScene,
-    _services_scenes_warehouse_createNotificationScene__WEBPACK_IMPORTED_MODULE_15__.createNotifictationScene,
-    _services_scenes_warehouse_editNotificationScene__WEBPACK_IMPORTED_MODULE_16__.editNotificationScene
+    _services_bot_admin_scenes_adminLoginWizard__WEBPACK_IMPORTED_MODULE_8__.adminLoginWizard,
+    _services_bot_admin_scenes_adminMainScene__WEBPACK_IMPORTED_MODULE_3__.adminMainScene,
+    _services_bot_admin_scenes_salaryScene__WEBPACK_IMPORTED_MODULE_4__.salaryScene,
+    _services_scenes_notifications_notificationsScene__WEBPACK_IMPORTED_MODULE_5__.notifictationsScene,
+    _services_scenes_notifications_createNotificationScene__WEBPACK_IMPORTED_MODULE_9__.createNotifictationScene,
+    _services_bot_admin_scenes_notificationsListScene__WEBPACK_IMPORTED_MODULE_19__.notificationsListScene,
+    _services_bot_admin_scenes_employmentScene__WEBPACK_IMPORTED_MODULE_6__.employmentScene,
+    _services_bot_admin_scenes_warehouseScene__WEBPACK_IMPORTED_MODULE_14__.warehouseScene,
+    _services_scenes_staff_staffScene__WEBPACK_IMPORTED_MODULE_7__.staffScene,
+    _services_scenes_notifications_editNotificationScene__WEBPACK_IMPORTED_MODULE_10__.editNotificationScene,
+    _services_bot_admin_scenes_selectBranchScene__WEBPACK_IMPORTED_MODULE_11__.selectBranchScene,
+    _services_bot_admin_scenes_productsScene__WEBPACK_IMPORTED_MODULE_12__.productsScene,
+    _services_bot_admin_scenes_createWarehouseNotificationScene__WEBPACK_IMPORTED_MODULE_13__.createWarehouseNotificationScene,
+    _services_bot_admin_scenes_warehouseNotificationsListScene__WEBPACK_IMPORTED_MODULE_15__.warehouseNotificationsListScene,
+    _services_bot_admin_scenes_notificationsManagementScene__WEBPACK_IMPORTED_MODULE_16__.notificationsManagementScene,
+    _services_bot_admin_scenes_notificationsCreateScene__WEBPACK_IMPORTED_MODULE_17__.notificationsCreateScene,
+    _services_bot_admin_scenes_remindLaterScene__WEBPACK_IMPORTED_MODULE_18__.remindLaterScene,
+    _services_bot_admin_scenes_notificationsListScene__WEBPACK_IMPORTED_MODULE_19__.notificationsListScene,
+    _services_bot_admin_scenes_tasksScene__WEBPACK_IMPORTED_MODULE_20__.tasksScene,
 ]);
 // Middleware
 bot.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
 bot.use(stage.middleware());
 bot.use(async (ctx, next) => {
-    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Received update', { update: ctx.update });
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Received update', { update: ctx.update });
     await next();
 });
 // Обработка команды /start
@@ -1318,6 +1906,25 @@ bot.action('mainmenu', async (ctx) => {
     await ctx.scene.enter('admin_main');
     await ctx.answerCbQuery('🏦 Главное меню');
 });
+// Обновляем обработчик
+bot.action(/remind_later_(\d+)/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        const notificationId = ctx.match[1];
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Starting remind later process:', {
+            notification_id: notificationId
+        });
+        // Инициализируем state если его нет
+        if (!ctx.scene.state) {
+            ctx.scene.state = {};
+        }
+        await ctx.scene.enter('remind_later_scene', { notificationId });
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in remind_later handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка');
+    }
+});
 // Обработка команды /ping
 bot.command('ping', (ctx) => {
     ctx.reply('pong!');
@@ -1327,7 +1934,7 @@ bot.action('create_notification', async (ctx) => {
     await ctx.scene.enter('create_notification');
 });
 bot.action('active_notifications', async (ctx) => {
-    await ctx.scene.enter('active_notifications');
+    await ctx.scene.enter('notifications_list_scene');
 });
 // Обработчики склада
 bot.action('warehouse_notification', async (ctx) => {
@@ -1347,11 +1954,11 @@ const sendMessageToClient = async (chatId, message, isButtonAvailable = true) =>
     ]);
     try {
         const response = await bot.telegram.sendMessage(chatId, message, isButtonAvailable ? { reply_markup: keyboard.reply_markup } : {});
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Message sent to Telegram successfully!', response);
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Message sent to Telegram successfully!', response);
         return true;
     }
     catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Exception occurred while sending message:', error.message);
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Exception occurred while sending message:', error.message);
         return false;
     }
 };
@@ -1602,8 +2209,6 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_1__);
 /* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
 /* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-/* harmony import */ var _utils_cabinetGate__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../../utils/cabinetGate */ "./src/telegraf/utils/cabinetGate.ts");
-
 
 
 
@@ -1719,8 +2324,8 @@ adminMainScene.action('salary', async (ctx) => {
     await ctx.scene.enter('salary');
 });
 adminMainScene.action('notifications', async (ctx) => {
-    await ctx.answerCbQuery('🔔 Уведомления...');
-    await (0,_utils_cabinetGate__WEBPACK_IMPORTED_MODULE_4__.cabinetGate)(ctx, 'notifications');
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_management');
 });
 adminMainScene.action('employment', async (ctx) => {
     await ctx.answerCbQuery('👥 Трудоустройство...');
@@ -1728,7 +2333,7 @@ adminMainScene.action('employment', async (ctx) => {
 });
 adminMainScene.action('warehouse', async (ctx) => {
     await ctx.answerCbQuery('🏪 Управление складом...');
-    await ctx.scene.enter('warehouse');
+    return ctx.scene.enter('warehouse'); // Теперь переходим в основное меню склада
 });
 adminMainScene.action('staff', async (ctx) => {
     await ctx.answerCbQuery('👥 Управление персоналом...');
@@ -1755,89 +2360,195 @@ adminMainScene.use(async (ctx, next) => {
 
 /***/ }),
 
-/***/ "./src/telegraf/services/scenes/employment/employmentActions.ts":
-/*!**********************************************************************!*\
-  !*** ./src/telegraf/services/scenes/employment/employmentActions.ts ***!
-  \**********************************************************************/
+/***/ "./src/telegraf/services/bot-admin/scenes/createWarehouseNotificationScene.ts":
+/*!************************************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/createWarehouseNotificationScene.ts ***!
+  \************************************************************************************/
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler),
-/* harmony export */   showApplications: () => (/* binding */ showApplications),
-/* harmony export */   showEmployment: () => (/* binding */ showEmployment)
+/* harmony export */   createWarehouseNotificationScene: () => (/* binding */ createWarehouseNotificationScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
+/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
 
+
+
+
+// Кнопки по умолчанию
 const defaultButtons = [
-    //Посмотреть заявки
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Заявки', 'viewApplications')],
-    //Трудоустроить
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Трудоустроить', 'employment')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
+    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_products')],
+    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
 ];
 const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
+    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
 ];
-const enterHandler = async (ctx) => {
-    const messageText = `[трудоустройство]`;
-    const buttonsArray = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([...defaultButtons]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, buttonsArray);
+// Создаем WizardScene
+const createWarehouseNotificationScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('create_warehouse_notification_scene', 
+// Шаг 1
+async (ctx) => {
+    var _a, _b;
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Первый шаг создания уведомления', {
+        selectedProductId: ctx.session.selectedProductId,
+        scene: (_a = ctx.scene.current) === null || _a === void 0 ? void 0 : _a.id
+    });
+    try {
+        if (!((_b = ctx.session) === null || _b === void 0 ? void 0 : _b.selectedProductId)) {
+            throw new Error('Продукт не выбран');
         }
-        catch (error) {
-            await ctx.reply(messageText, buttonsArray);
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Отмена', 'back_to_products')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]);
+        await ctx.reply('Введите минимальное количество товара, при достижении которого нужно отправить уведомление:', keyboard);
+        return ctx.wizard.next();
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Ошибка в первом шаге:', error);
+        await ctx.reply('Произошла ошибка. Возвращаемся к выбору продукта.');
+        return ctx.scene.enter('products_scene');
+    }
+}, 
+// Шаг 2: Подтверждение
+// Шаг 2: Подтверждение
+async (ctx) => {
+    var _a;
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Вход во второй шаг', {
+        message: ctx.message,
+        session: ctx.scene.session,
+        wizard_state: (_a = ctx.wizard) === null || _a === void 0 ? void 0 : _a.state
+    });
+    if (!ctx.message || !('text' in ctx.message)) {
+        await ctx.reply('Пожалуйста, введите число.');
+        return;
+    }
+    const amount = parseInt(ctx.message.text, 10);
+    if (isNaN(amount) || amount < 0) {
+        await ctx.reply('Пожалуйста, введите положительное число.');
+        return;
+    }
+    try {
+        // Инициализируем объект, если его нет
+        if (!ctx.session.warehouseForm) {
+            ctx.session.warehouseForm = {
+                productId: ctx.session.selectedProductId,
+                minAmount: null,
+                type: 'warehouse'
+            };
         }
+        // Теперь безопасно устанавливаем значение
+        ctx.session.warehouseForm.minAmount = amount;
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Подтвердить', 'confirm_warehouse_notification')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'back_to_products')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]);
+        const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Проверьте настройки уведомления:
+
+${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)('Минимальное количество')}: ${amount}
+
+Подтвердите создание уведомления.`;
+        await ctx.reply(message, keyboard);
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Подтверждение настроек отправлено', {
+            amount,
+            form: ctx.session.warehouseForm
+        });
     }
-    else {
-        await ctx.reply(messageText, buttonsArray);
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Ошибка во втором шаге:', error);
+        await ctx.reply('Произошла ошибка при обработке данных. Попробуйте еще раз.');
+        return ctx.scene.enter('products_scene');
     }
-};
-const showApplications = async (ctx) => {
-    const messageText = `Тут выводим активные заявки на трудоустройство`;
-    const buttonsArray = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([...defaultButtonsMenuOnly]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, buttonsArray);
+});
+// Добавляем обработчики действий
+createWarehouseNotificationScene.action('confirm_warehouse_notification', async (ctx) => {
+    var _a, _b;
+    try {
+        // Берем form из ctx.session вместо ctx.scene.session
+        const form = ctx.session.warehouseForm;
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Попытка создания уведомления', {
+            form,
+            user_id: (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id
+        });
+        if (!form || !form.productId || !form.minAmount) {
+            throw new Error('Неполные данные формы');
         }
-        catch (error) {
-            await ctx.reply(messageText, buttonsArray);
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].createWarehouseNotification(ctx.from.id, {
+            productId: form.productId,
+            minAmount: form.minAmount,
+            type: 'warehouse',
+            branchId: ctx.session.selectedBranchId // Добавляем из сессии
+        });
+        if (!result) {
+            throw new Error('Failed to create notification');
         }
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать еще', 'back_to_products')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Все уведомления', 'warehouse_list')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]);
+        const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `✅ Уведомление создано
+
+Когда количество товара достигнет ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(form.minAmount.toString())} единиц, 
+вы получите уведомление.`;
+        await ctx.reply(message, keyboard);
+        await ctx.answerCbQuery('Уведомление создано');
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Уведомление успешно создано', {
+            form,
+            user_id: (_b = ctx.from) === null || _b === void 0 ? void 0 : _b.id
+        });
     }
-    else {
-        await ctx.reply(messageText, buttonsArray);
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error creating notification:', error);
+        await ctx.reply('Произошла ошибка при создании уведомления. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
     }
-};
-const showEmployment = async (ctx) => {
-    const messageText = `Перейдите в @Beauty_bot_master_bot по кнопке ниже, чтобы подать заявку на трудоустройство`;
-    //@Beauty_bot_master_bot
-    const go_to_bot = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.url('Перейти в бота', 'https://t.me/Beauty_bot_master_bot?start=registration');
-    const buttonsArray = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[go_to_bot], ...defaultButtonsMenuOnly]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, buttonsArray);
-        }
-        catch (error) {
-            await ctx.reply(messageText, buttonsArray);
-        }
+});
+createWarehouseNotificationScene.action('back_to_products', async (ctx) => {
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Возврат к списку продуктов');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('products_scene');
+});
+createWarehouseNotificationScene.action('warehouse_list', async (ctx) => {
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Переход к списку уведомлений');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('warehouse_notifications_list');
+});
+createWarehouseNotificationScene.action('mainmenu', async (ctx) => {
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Возврат в главное меню');
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+// Обработка необработанных callback-запросов
+// Обработка необработанных callback-запросов
+// Обработка текстовых сообщений вне шагов
+createWarehouseNotificationScene.on('text', async (ctx, next) => {
+    var _a, _b, _c;
+    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Получено текстовое сообщение', {
+        step: (_a = ctx.wizard) === null || _a === void 0 ? void 0 : _a.cursor,
+        text: ctx.message.text
+    });
+    if (((_b = ctx.wizard) === null || _b === void 0 ? void 0 : _b.cursor) === 0 || ((_c = ctx.wizard) === null || _c === void 0 ? void 0 : _c.cursor) === 1) {
+        return next();
     }
-    else {
-        await ctx.reply(messageText, buttonsArray);
-    }
-};
+    await ctx.reply('Пожалуйста, используйте доступные команды.');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (createWarehouseNotificationScene);
 
 
 /***/ }),
 
-/***/ "./src/telegraf/services/scenes/employment/employmentScene.ts":
-/*!********************************************************************!*\
-  !*** ./src/telegraf/services/scenes/employment/employmentScene.ts ***!
-  \********************************************************************/
+/***/ "./src/telegraf/services/bot-admin/scenes/employmentScene.ts":
+/*!*******************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/employmentScene.ts ***!
+  \*******************************************************************/
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -1846,29 +2557,1697 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
 /* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _employmentActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./employmentActions */ "./src/telegraf/services/scenes/employment/employmentActions.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! fs */ "fs");
+/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_2__);
+
 
 
 const employmentScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('employment');
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-// Define the enter handler
+// Функция для отображения главного меню трудоустройства
+const showEmploymentMenu = async (ctx) => {
+    var _a;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Активные заявки', 'show_applications')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('➕ Трудоустроить', 'add_employee')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'mainmenu')]
+    ]);
+    const text = '👥 Управление трудоустройством\n\nВыберите действие:';
+    if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
+        await ctx.editMessageText(text, keyboard);
+    }
+    else {
+        await ctx.reply(text, keyboard);
+    }
+};
+// Вход в сцену
 employmentScene.enter(async (ctx) => {
-    await (0,_employmentActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
+    await showEmploymentMenu(ctx);
 });
-employmentScene.action('reenter', async (ctx) => {
+// Обработчик для показа активных заявок
+employmentScene.action('show_applications', async (ctx) => {
+    try {
+        const applications = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getActiveRegistrations();
+        console.log('Received applications:', applications); // Добавим лог
+        if (!applications || applications.length === 0) {
+            await ctx.editMessageText('📝 Активные заявки отсутствуют', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_employment')]]));
+            return;
+        }
+        const buttons = applications.map(app => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`👤 ${app.short_name}`, `view_application_${app.id}`)
+        ]));
+        buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_employment')]);
+        await ctx.editMessageText('📋 Активные заявки на трудоустройство:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    }
+    catch (error) {
+        console.error('Error fetching applications:', error);
+        await ctx.reply('Произошла ошибка при получении заявок.');
+    }
+});
+// Обработчик просмотра конкретной заявки
+employmentScene.action(/^view_application_(\d+)$/, async (ctx) => {
+    try {
+        const applicationId = ctx.match[1];
+        const application = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getRegistrationDetails(applicationId);
+        // Форматируем дату из ISO в DD.MM.YYYY
+        const formattedDate = application.has_med_book && application.med_book_expiry
+            ? new Date(application.med_book_expiry).toLocaleDateString('ru-RU')
+            : '';
+        const messageText = `
+👤 Заявка на трудоустройство
+
+ФИО: ${application.full_name}
+Телефон: ${application.phone}
+Email: ${application.email}
+Филиал: ${application.branch_name}
+Ставка: ${application.master_price}%
+
+🏥 Мед. книжка: ${application.has_med_book ? '✅' : '❌'}
+${application.has_med_book ? `Срок действия до: ${formattedDate}` : ''}
+📜 Сертификат: ${application.has_education_cert ? '✅' : '❌'}
+
+🏦 Самозанятый: ${application.is_self_employed ? '✅' : '❌'}
+`;
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Принять', `approve_${applicationId}`),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отказать', `reject_${applicationId}`)
+            ],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📄 Проверить документы', `check_docs_${applicationId}`)],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К списку заявок', 'show_applications')]
+        ]);
+        await ctx.editMessageText(messageText, keyboard);
+    }
+    catch (error) {
+        console.error('Error viewing application:', error);
+        await ctx.reply('Произошла ошибка при просмотре заявки.');
+    }
+});
+// Обработка проверки документов
+// Обработка проверки документов
+employmentScene.action(/^check_docs_(\d+)$/, async (ctx) => {
+    const applicationId = ctx.match[1];
+    try {
+        const documents = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getRegistrationDocuments(applicationId);
+        if (documents && documents.length > 0) {
+            for (const doc of documents) {
+                try {
+                    const fileBuffer = await fs__WEBPACK_IMPORTED_MODULE_2__.promises.readFile(doc.path);
+                    await ctx.replyWithDocument({
+                        source: fileBuffer,
+                        filename: doc.original_name
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                catch (docError) {
+                    console.error('Error sending document:', {
+                        error: docError,
+                        document: doc
+                    });
+                    await ctx.reply(`Ошибка при отправке документа ${doc.original_name}`);
+                }
+            }
+            // Добавляем сообщение с кнопкой возврата после отправки всех документов
+            await ctx.reply('Все документы отправлены', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к заявке', `view_application_${applicationId}`)
+                ]]));
+        }
+        else {
+            await ctx.reply('Документы еще не были загружены кандидатом.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к заявке', `view_application_${applicationId}`)
+                ]]));
+        }
+    }
+    catch (error) {
+        console.error('Error fetching documents:', error);
+        await ctx.reply('Произошла ошибка при получении документов.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к заявке', `view_application_${applicationId}`)
+            ]]));
+    }
+});
+// Обработчики принятия/отказа
+employmentScene.action(/^approve_(\d+)$/, async (ctx) => {
+    const applicationId = ctx.match[1];
+    try {
+        await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].approveRegistration(applicationId);
+        await ctx.answerCbQuery('✅ Кандидат успешно принят на работу');
+        await ctx.scene.reenter();
+    }
+    catch (error) {
+        console.error('Error approving application:', error);
+        await ctx.reply('Произошла ошибка при одобрении заявки.');
+    }
+});
+employmentScene.action(/^reject_(\d+)$/, async (ctx) => {
+    const applicationId = ctx.match[1];
+    try {
+        await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].rejectRegistration(applicationId);
+        await ctx.answerCbQuery('❌ Заявка отклонена');
+        await ctx.scene.reenter();
+    }
+    catch (error) {
+        console.error('Error rejecting application:', error);
+        await ctx.reply('Произошла ошибка при отклонении заявки.');
+    }
+});
+// Обработчик добавления нового сотрудника
+employmentScene.action('add_employee', async (ctx) => {
+    const text = `
+📝 Инструкция по трудоустройству нового мастера:
+
+1️⃣ Отправьте кандидату ссылку на бота:
+@testmaster031224_bot
+
+2️⃣ Кандидату необходимо:
+- Запустить бота командой /start
+- Пройти процесс регистрации
+- Загрузить необходимые документы
+
+❗️ После загрузки документов заявка появится в разделе "Активные заявки"
+    `;
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_employment')
+        ]]);
+    await ctx.editMessageText(text, keyboard);
+});
+// Обработчики навигации
+employmentScene.action('back_to_employment', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showEmploymentMenu(ctx);
+});
+employmentScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+// Обработка ошибок
+employmentScene.use(async (ctx, next) => {
+    try {
+        await next();
+    }
+    catch (error) {
+        console.error('Error in employmentScene:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже или обратитесь к администратору.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'back_to_employment')
+            ]]));
+    }
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/notificationsCreateScene.ts":
+/*!****************************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/notificationsCreateScene.ts ***!
+  \****************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   notificationsCreateScene: () => (/* binding */ notificationsCreateScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+
+const notificationsCreateScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('notifications_create_scene');
+// Обработчик входа в сцену
+notificationsCreateScene.enter(async (ctx) => {
+    // Инициализируем структуру уведомления
+    ctx.session.notificationForm = {
+        name: '',
+        sum: '',
+        dateTime: '',
+        type: '',
+        frequency: '', // daily, weekly, monthly, custom
+        frequency_value: '', // Для custom: количество дней
+        created_at: new Date().toISOString()
+    };
+    await ctx.reply('Введите название уведомления\n\nПример: Оплатить аренду помещения', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_notifications')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]));
+});
+// Обработчик текстовых сообщений
+notificationsCreateScene.on('text', async (ctx) => {
+    if (!ctx.session.notificationForm) {
+        await ctx.scene.reenter();
+        return;
+    }
+    const form = ctx.session.notificationForm;
+    try {
+        // Этап ввода названия
+        if (!form.name) {
+            form.name = ctx.message.text;
+            await ctx.reply('Какая сумма для оплаты?\n\nЕсли сумма не требуется, введите 0', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_name')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        // Этап ввода суммы
+        if (!form.sum && form.sum !== '0') {
+            const sum = Number(ctx.message.text);
+            if (isNaN(sum) || sum < 0) {
+                await ctx.reply('Пожалуйста, введите положительное число или 0');
+                return;
+            }
+            form.sum = sum.toString();
+            await ctx.reply('Введите дату и время уведомления\n\nФормат: ДД.ММ.ГГГГ ЧЧ:ММ\nПример: 25.12.2024 15:00', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_sum')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        // Этап ввода даты и времени
+        if (!form.dateTime) {
+            const dateTimeRegex = /^(\d{2})\.(\d{2})\.(\d{4})\s(\d{2}):(\d{2})$/;
+            const match = ctx.message.text.match(dateTimeRegex);
+            if (!match) {
+                await ctx.reply('Неверный формат даты и времени!\n\n' +
+                    'Используйте формат: ДД.ММ.ГГГГ ЧЧ:ММ\n' +
+                    'Например: 25.12.2024 15:00');
+                return;
+            }
+            const [_, day, month, year, hour, minute] = match;
+            const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+            if (date < new Date()) {
+                await ctx.reply('Дата и время не могут быть в прошлом');
+                return;
+            }
+            form.dateTime = ctx.message.text;
+            // Запрашиваем тип уведомления
+            await ctx.reply('Уведомление разовое или повторяющееся?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⚡️ Разовое', 'type_single'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Повторяющееся', 'type_recurring')
+                ],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_datetime')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        // Этап ввода значения для кастомной периодичности
+        if (form.type === 'recurring' && form.frequency === 'custom' && !form.frequency_value) {
+            const days = parseInt(ctx.message.text);
+            if (isNaN(days) || days <= 0 || days > 365) {
+                await ctx.reply('Пожалуйста, введите число от 1 до 365');
+                return;
+            }
+            form.frequency_value = days.toString();
+            await createNotification(ctx);
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in notifications create scene:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте начать сначала.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Начать сначала', 'restart')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_notifications')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+});
+// Обработчики типа уведомления
+notificationsCreateScene.action('type_single', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.type = 'single';
+    await createNotification(ctx);
+});
+notificationsCreateScene.action('type_recurring', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.type = 'recurring';
+    await ctx.reply('Выберите периодичность уведомления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждый день', 'frequency_daily')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждую неделю', 'frequency_weekly')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждый месяц', 'frequency_monthly')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Указать свой период', 'frequency_custom')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_type')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]));
+});
+// Обработчики периодичности
+notificationsCreateScene.action(['frequency_daily', 'frequency_weekly', 'frequency_monthly'], async (ctx) => {
+    await ctx.answerCbQuery();
+    const frequencyMap = {
+        'frequency_daily': 'daily',
+        'frequency_weekly': 'weekly',
+        'frequency_monthly': 'monthly'
+    };
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const data = ctx.callbackQuery.data;
+        const frequency = frequencyMap[data];
+        if (frequency) {
+            ctx.session.notificationForm.frequency = frequency;
+        }
+    }
+    await createNotification(ctx);
+});
+notificationsCreateScene.action('frequency_custom', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.frequency = 'custom';
+    await ctx.reply('Введите количество дней между уведомлениями (от 1 до 365):', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_frequency')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]));
+});
+// Функция создания уведомления
+async function createNotification(ctx) {
+    try {
+        const form = ctx.session.notificationForm;
+        if (!form) {
+            throw new Error('Notification form is empty');
+        }
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].createNotificationByTelegramId(ctx.from.id, ctx.session.notificationForm);
+        if (!(result === null || result === void 0 ? void 0 : result.success)) {
+            throw new Error((result === null || result === void 0 ? void 0 : result.message) || 'Failed to create notification');
+        }
+        const message = `✅ Уведомление успешно создано!\n\n` +
+            `📝 Название: ${form.name}\n` +
+            `💰 Сумма: ${form.sum === '0' ? 'не указана' : form.sum + ' руб.'}\n` +
+            `🕐 Время: ${form.dateTime}\n` +
+            `🔄 Тип: ${form.type === 'single' ? 'разовое' : 'повторяющееся'}`;
+        await ctx.reply(message, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать ещё', 'create_another')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 К списку уведомлений', 'back_to_notifications')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error creating notification:', error);
+        await ctx.reply('❌ Ошибка при создании уведомления', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'restart')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_notifications')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+}
+// Обработчики навигации и сброса данных
+notificationsCreateScene.action('reset_name', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.name = '';
     await ctx.scene.reenter();
 });
-//viewApplications
-//employment
-employmentScene.action('viewApplications', async (ctx) => {
-    await (0,_employmentActions__WEBPACK_IMPORTED_MODULE_1__.showApplications)(ctx);
+notificationsCreateScene.action('reset_sum', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.sum = '';
+    await ctx.reply('Какая сумма для оплаты?\n\nЕсли сумма не требуется, введите 0');
 });
-employmentScene.action('employment', async (ctx) => {
-    await (0,_employmentActions__WEBPACK_IMPORTED_MODULE_1__.showEmployment)(ctx);
+notificationsCreateScene.action('reset_datetime', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.dateTime = '';
+    await ctx.reply('Введите дату и время уведомления\n\nФормат: ДД.ММ.ГГГГ ЧЧ:ММ\nПример: 25.12.2024 15:00');
 });
+notificationsCreateScene.action('reset_type', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.type = '';
+    await ctx.reply('Уведомление разовое или повторяющееся?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⚡️ Разовое', 'type_single'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Повторяющееся', 'type_recurring')
+        ],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_datetime')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]));
+});
+notificationsCreateScene.action('reset_frequency', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.notificationForm.frequency = '';
+    ctx.session.notificationForm.type = 'recurring';
+    await ctx.reply('Выберите периодичность уведомления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждый день', 'frequency_daily')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждую неделю', 'frequency_weekly')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Каждый месяц', 'frequency_monthly')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Указать свой период', 'frequency_custom')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reset_type')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]));
+});
+// Общие обработчики навигации
+notificationsCreateScene.action('create_another', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.reenter();
+});
+notificationsCreateScene.action('back_to_notifications', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_management');
+});
+notificationsCreateScene.action('restart', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.reenter();
+});
+notificationsCreateScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (notificationsCreateScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/notificationsListScene.ts":
+/*!**************************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/notificationsListScene.ts ***!
+  \**************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   notificationsListScene: () => (/* binding */ notificationsListScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var date_fns_tz__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! date-fns-tz */ "date-fns-tz");
+/* harmony import */ var date_fns_tz__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(date_fns_tz__WEBPACK_IMPORTED_MODULE_3__);
+
+
+
+
+const notificationsListScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('notifications_list_scene');
+// Вход в сцену - показываем список уведомлений
+notificationsListScene.enter(async (ctx) => {
+    try {
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getAdminNotifications(ctx.from.id);
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !(response === null || response === void 0 ? void 0 : response.data)) {
+            await ctx.reply('❌ Ошибка при загрузке уведомлений', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать уведомление', 'create_notification')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        let notificationsArray = [];
+        // Response.data теперь точно содержит PaginatedNotifications
+        if (response.data.data) {
+            notificationsArray = response.data.data;
+        }
+        if (notificationsArray.length === 0) {
+            await ctx.reply('📝 У вас пока нет активных уведомлений', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать уведомление', 'create_notification')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        if (notificationsArray.length === 0) {
+            await ctx.reply('📝 У вас пока нет активных уведомлений', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать уведомление', 'create_notification')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        await ctx.reply('📋 Список ваших уведомлений:\n\n' +
+            notificationsArray.map((notif, index) => {
+                let formattedTime = notif.notification_datetime;
+                if (notif.notification_datetime && typeof notif.notification_datetime === 'string') {
+                    try {
+                        formattedTime = (0,date_fns_tz__WEBPACK_IMPORTED_MODULE_3__.formatInTimeZone)(new Date(notif.notification_datetime), 'Europe/Moscow', 'dd.MM.yyyy HH:mm');
+                    }
+                    catch (e) {
+                        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error formatting notification time', { error: e, notification: notif });
+                    }
+                }
+                return `${index + 1}. 📝 ${notif.name}\n` +
+                    `💰 Сумма: ${notif.sum ? `${notif.sum} руб.` : 'не указана'}\n` +
+                    `🕐 Время: ${formattedTime}\n` +
+                    `🔄 Тип: ${notif.type === 'single' ? 'разовое' : 'повторяющееся'}\n`;
+            }).join('\n'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            ...notificationsArray.map(notif => [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`✏️ ${notif.name}`, `edit_${notif.id}`)
+            ]),
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать уведомление', 'create_notification')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in notifications list scene:', error);
+        await ctx.reply('❌ Произошла ошибка при загрузке уведомлений');
+    }
+});
+// Обработка нажатия на уведомление для редактирования
+notificationsListScene.action(/edit_(\d+)/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        const notificationId = ctx.match[1];
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getAdminNotification(parseInt(notificationId));
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !(response === null || response === void 0 ? void 0 : response.data)) {
+            await ctx.reply('❌ Уведомление не найдено');
+            return;
+        }
+        const notification = response.data;
+        let formattedTime = 'не указано';
+        if (notification.notification_datetime) {
+            try {
+                formattedTime = (0,date_fns_tz__WEBPACK_IMPORTED_MODULE_3__.formatInTimeZone)(new Date(notification.notification_datetime), 'Europe/Moscow', 'dd.MM.yyyy HH:mm');
+            }
+            catch (error) {
+                _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Ошибка форматирования даты', { error, date: notification.notification_datetime });
+            }
+        }
+        ctx.session.selectedNotificationId = parseInt(notificationId);
+        await ctx.reply(`Выберите, что хотите изменить:\n\n` +
+            `📝 Название: ${notification.name || 'не указано'}\n` +
+            `💰 Сумма: ${notification.sum ? `${notification.sum} руб.` : 'не указана'}\n` +
+            `🕐 Время: ${formattedTime}`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Название', 'edit_name')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('💰 Сумму', 'edit_sum')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🕐 Дату', 'edit_date')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Удалить', 'delete_notification')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_list')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Ошибка в действии редактирования уведомления:', error);
+        await ctx.reply('❌ Произошла ошибка');
+    }
+});
+// Обработчики редактирования
+notificationsListScene.action('edit_name', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.editField = 'name';
+    await ctx.reply('Введите новое название уведомления:');
+});
+notificationsListScene.action('edit_sum', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.editField = 'sum';
+    await ctx.reply('Введите новую сумму (или 0, если сумма не требуется):');
+});
+notificationsListScene.action('edit_date', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.editField = 'date';
+    await ctx.reply('Введите новую дату и время:\n\n' +
+        'Формат: ДД.ММ.ГГГГ ЧЧ:ММ\n' +
+        'Например: 25.12.2024 15:00');
+});
+// Обработка текстовых сообщений для редактирования
+// Обработка текстовых сообщений для редактирования
+notificationsListScene.on('text', async (ctx) => {
+    if (!ctx.session.editField || !ctx.session.selectedNotificationId) {
+        return;
+    }
+    try {
+        let updateData = {};
+        const value = ctx.message.text;
+        // Получаем текущее уведомление для проверки его типа
+        const currentNotification = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getAdminNotification(ctx.session.selectedNotificationId);
+        if (!(currentNotification === null || currentNotification === void 0 ? void 0 : currentNotification.success) || !(currentNotification === null || currentNotification === void 0 ? void 0 : currentNotification.data)) {
+            throw new Error('Failed to get current notification');
+        }
+        // Особая обработка для даты
+        if (ctx.session.editField === 'date') {
+            try {
+                // Парсим введённую дату в формате ДД.ММ.ГГГГ ЧЧ:ММ
+                const [datePart, timePart] = value.split(' ');
+                if (!datePart || !timePart) {
+                    throw new Error('Invalid date format');
+                }
+                const [day, month, year] = datePart.split('.');
+                const [hours, minutes] = timePart.split(':');
+                // Проверяем все компоненты даты
+                if (!day || !month || !year || !hours || !minutes) {
+                    throw new Error('Invalid date components');
+                }
+                // Создаём дату в московском часовом поясе
+                const moscowDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes));
+                if (isNaN(moscowDate.getTime())) {
+                    throw new Error('Invalid date');
+                }
+                // Преобразуем в UTC для сохранения
+                const utcDate = (0,date_fns_tz__WEBPACK_IMPORTED_MODULE_3__.formatInTimeZone)(moscowDate, 'Europe/Moscow', "yyyy-MM-dd HH:mm:ss");
+                updateData.notification_datetime = utcDate;
+                // Для повторяющихся уведомлений сбрасываем дату последней отправки
+                if (currentNotification.data.type === 'recurring') {
+                    updateData.last_notification_sent_at = null;
+                }
+            }
+            catch (error) {
+                _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error parsing date:', error);
+                await ctx.reply('❌ Неверный формат даты. Используйте формат ДД.ММ.ГГГГ ЧЧ:ММ\n' +
+                    'Например: 25.12.2024 15:00');
+                return;
+            }
+        }
+        else {
+            // Для остальных полей просто передаём значение
+            updateData[ctx.session.editField] = value;
+        }
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].updateAdminNotification(ctx.session.selectedNotificationId, updateData);
+        if (result === null || result === void 0 ? void 0 : result.success) {
+            await ctx.reply('✅ Уведомление успешно обновлено', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 К списку уведомлений', 'back_to_list')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+        }
+        else {
+            throw new Error('Failed to update notification');
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error updating notification:', error);
+        await ctx.reply('❌ Произошла ошибка при обновлении');
+    }
+    ctx.session.editField = undefined;
+});
+// Удаление уведомления
+notificationsListScene.action('delete_notification', async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        if (!ctx.session.selectedNotificationId) {
+            throw new Error('No notification selected');
+        }
+        const success = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].deleteAdminNotification(ctx.session.selectedNotificationId);
+        if (success) {
+            await ctx.reply('✅ Уведомление удалено', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 К списку уведомлений', 'back_to_list')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+        }
+        else {
+            throw new Error('Failed to delete notification');
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error deleting notification:', error);
+        await ctx.reply('❌ Произошла ошибка при удалении уведомления');
+    }
+});
+// Навигация
+notificationsListScene.action('back_to_list', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.session.editField = undefined;
+    ctx.session.selectedNotificationId = undefined;
+    await ctx.scene.reenter();
+});
+notificationsListScene.action('create_notification', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_create_scene');
+});
+notificationsListScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (notificationsListScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/notificationsManagementScene.ts":
+/*!********************************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/notificationsManagementScene.ts ***!
+  \********************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   notificationsManagementScene: () => (/* binding */ notificationsManagementScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+
+const notificationsManagementScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('notifications_management');
+notificationsManagementScene.enter(async (ctx) => {
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Создать уведомление', 'create_notification')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Активные уведомления', 'active_notifications')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_main')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+    ]);
+    await ctx.reply('Управление уведомлениями\n\n' +
+        'Здесь вы можете создавать напоминания и просматривать активные уведомления.', keyboard);
+});
+// Обработчик кнопки создания нового уведомления
+notificationsManagementScene.action('create_notification', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_create_scene');
+});
+// Обработчик кнопки просмотра активных уведомлений
+notificationsManagementScene.action('active_notifications', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_list_scene');
+});
+// Обработчик кнопки "Назад"
+notificationsManagementScene.action('back_to_main', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+// Обработчик кнопки "Главное меню"
+notificationsManagementScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (notificationsManagementScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/productsScene.ts":
+/*!*****************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/productsScene.ts ***!
+  \*****************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   productsScene: () => (/* binding */ productsScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+
+
+
+const productsScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('products_scene');
+productsScene.enter(async (ctx) => {
+    var _a, _b, _c;
+    try {
+        // Читаем из общей сессии
+        const branchId = parseInt(ctx.session.selectedBranchId, 10);
+        console.log('Products scene enter:', {
+            sessionBranchId: ctx.session.selectedBranchId,
+            parsedBranchId: branchId
+        });
+        if (!branchId || isNaN(branchId)) {
+            await ctx.reply('Филиал не выбран');
+            return ctx.scene.enter('select_branch_scene');
+        }
+        // Получаем товары филиала
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getProducts(branchId);
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !(response === null || response === void 0 ? void 0 : response.data)) {
+            await ctx.reply('В этом филиале нет товаров');
+            return ctx.scene.enter('select_branch_scene');
+        }
+        const products = response.data;
+        const buttons = [];
+        for (let i = 0; i < products.length; i++) {
+            const product = products[i];
+            buttons.push([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${product.title} (${((_b = (_a = product.actual_amounts) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.amount) || 0} шт)`, `product_${product.good_id}`)
+            ]);
+        }
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к филиалам', 'back_to_branches'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')
+        ]);
+        const messageText = 'Выберите товар для которого нужно отслеживать остаток:';
+        if ((_c = ctx.callbackQuery) === null || _c === void 0 ? void 0 : _c.message) {
+            await ctx.editMessageText(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+        else {
+            await ctx.reply(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+    }
+    catch (error) {
+        console.error('Error in products scene:', error);
+        await ctx.reply('Произошла ошибка при загрузке товаров');
+        return ctx.scene.enter('select_branch_scene');
+    }
+});
+productsScene.action('back_to_branches', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('select_branch_scene');
+});
+productsScene.action('warehouse_list', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('warehouse_notifications_list');
+});
+productsScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+productsScene.action(/^product_(\d+)$/, async (ctx) => {
+    var _a, _b, _c, _d;
+    try {
+        const productId = ctx.match[1];
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Начало обработки выбора продукта:', {
+            productId,
+            branch_id: ctx.session.selectedBranchId,
+            user_id: (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id
+        });
+        // Сохраняем ID в session (не scene.session!)
+        ctx.session.selectedProductId = productId;
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Переход к сцене создания уведомления', {
+            selectedProductId: productId,
+            session: ctx.session
+        });
+        // Сначала делаем переход
+        const result = await ctx.scene.enter('create_warehouse_notification_scene');
+        // Только потом отвечаем на callback
+        await ctx.answerCbQuery('Товар выбран ✓');
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].info('Переход выполнен', {
+            success: true,
+            currentScene: (_b = ctx.scene.current) === null || _b === void 0 ? void 0 : _b.id
+        });
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Ошибка при выборе продукта:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            productId: (_c = ctx.match) === null || _c === void 0 ? void 0 : _c[1],
+            userId: (_d = ctx.from) === null || _d === void 0 ? void 0 : _d.id
+        });
+        await ctx.answerCbQuery('Произошла ошибка ❌');
+        await ctx.reply('Произошла ошибка при выборе товара. Попробуйте еще раз.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Попробовать снова', 'refresh_products')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+});
+productsScene.action('refresh_products', async (ctx) => {
+    await ctx.answerCbQuery('Обновляем список... ⌛');
+    await ctx.scene.reenter();
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/remindLaterScene.ts":
+/*!********************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/remindLaterScene.ts ***!
+  \********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   remindLaterScene: () => (/* binding */ remindLaterScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var moment__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! moment */ "moment");
+/* harmony import */ var moment__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(moment__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var moment_timezone__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! moment-timezone */ "moment-timezone");
+/* harmony import */ var moment_timezone__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(moment_timezone__WEBPACK_IMPORTED_MODULE_4__);
+
+
+
+ // Изменен импорт
+
+const remindLaterScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('remind_later_scene');
+// Обработчик входа в сцену
+remindLaterScene.enter(async (ctx) => {
+    try {
+        const { state } = ctx.scene;
+        const notificationId = state === null || state === void 0 ? void 0 : state.notificationId;
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Entering remind later scene:', {
+            state,
+            notificationId,
+            scene_state: ctx.scene.state
+        });
+        if (!notificationId) {
+            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('No notification ID provided');
+            await ctx.reply('❌ Произошла ошибка. Попробуйте снова.');
+            await ctx.scene.leave();
+            return;
+        }
+        await ctx.reply('⏰ Выберите время для повторного напоминания:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🕐 Через 15 минут', `remind_15_${notificationId}`)],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🕐 Через час', `remind_60_${notificationId}`)],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Завтра в это же время', `remind_tomorrow_${notificationId}`)],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'cancel_remind')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in remind later scene enter:', error);
+        await ctx.reply('❌ Произошла ошибка. Попробуйте снова.');
+        await ctx.scene.leave();
+    }
+});
+// Обработчик для напоминания через 15 минут
+remindLaterScene.action(/remind_15_(\d+)/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const notificationId = ctx.match[1];
+    await handleReschedule(ctx, notificationId, 15, 'minutes');
+});
+// Обработчик для напоминания через час
+remindLaterScene.action(/remind_60_(\d+)/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const notificationId = ctx.match[1];
+    await handleReschedule(ctx, notificationId, 1, 'hours');
+});
+// Обработчик для напоминания завтра
+remindLaterScene.action(/remind_tomorrow_(\d+)/, async (ctx) => {
+    await ctx.answerCbQuery();
+    const notificationId = ctx.match[1];
+    await handleReschedule(ctx, notificationId, 24, 'hours');
+});
+// Обработчик отмены
+remindLaterScene.action('cancel_remind', async (ctx) => {
+    await ctx.answerCbQuery('Отменено');
+    await ctx.reply('❌ Перенос напоминания отменён');
+    await ctx.scene.leave();
+});
+// Функция для обработки переноса уведомления
+async function handleReschedule(ctx, notificationId, amount, unit) {
+    try {
+        // Добавляем минуты/часы к текущему UTC времени
+        const utcDateTime = moment__WEBPACK_IMPORTED_MODULE_3___default()().utc()
+            .add(amount, unit)
+            .format('YYYY-MM-DD HH:mm:00');
+        // Для отображения конвертируем в московское время
+        const mskDisplayTime = moment__WEBPACK_IMPORTED_MODULE_3___default()().utc()
+            .add(amount, unit)
+            .tz('Europe/Moscow')
+            .format('DD.MM.YYYY HH:mm');
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].rescheduleNotification(parseInt(notificationId), utcDateTime // отправляем время в UTC
+        );
+        if (result === null || result === void 0 ? void 0 : result.success) {
+            await ctx.reply(`✅ Напоминание перенесено на ${mskDisplayTime}`, // показываем московское время
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+        }
+        else {
+            throw new Error('Failed to reschedule notification');
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error rescheduling notification:', error);
+        await ctx.reply('❌ Произошла ошибка при переносе уведомления');
+    }
+    await ctx.scene.leave();
+}
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (remindLaterScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/salaryScene.ts":
+/*!***************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/salaryScene.ts ***!
+  \***************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   salaryScene: () => (/* binding */ salaryScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! fs */ "fs");
+/* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! path */ "path");
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+
+
+const salaryScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('salary');
+// Обработчик кнопки экспорта
+salaryScene.action('export_salary', async (ctx) => {
+    try {
+        await ctx.answerCbQuery('Генерируем отчет...');
+        // Получаем файл через сервис
+        const excelBuffer = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].exportSalaryReport();
+        // Создаем временный файл
+        const tempDir = path__WEBPACK_IMPORTED_MODULE_2___default().join(__dirname, '../../../temp');
+        if (!fs__WEBPACK_IMPORTED_MODULE_1___default().existsSync(tempDir)) {
+            fs__WEBPACK_IMPORTED_MODULE_1___default().mkdirSync(tempDir, { recursive: true });
+        }
+        const tempFilePath = path__WEBPACK_IMPORTED_MODULE_2___default().join(tempDir, `salary_${Date.now()}.xlsx`);
+        fs__WEBPACK_IMPORTED_MODULE_1___default().writeFileSync(tempFilePath, excelBuffer);
+        // Отправляем файл
+        await ctx.replyWithDocument({
+            source: tempFilePath,
+            filename: `salary_report.xlsx`
+        });
+        // Удаляем временный файл
+        fs__WEBPACK_IMPORTED_MODULE_1___default().unlinkSync(tempFilePath);
+    }
+    catch (error) {
+        console.error('Error exporting salary:', error);
+        await ctx.reply('Произошла ошибка при формировании отчета. Попробуйте позже.');
+    }
+});
+salaryScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+// Входная точка сцены
+salaryScene.enter(async (ctx) => {
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📥 Скачать отчет по зарплате', 'export_salary')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('◀️ Назад', 'mainmenu')]
+    ]);
+    await ctx.reply('💰 Управление зарплатами', keyboard);
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/selectBranchScene.ts":
+/*!*********************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/selectBranchScene.ts ***!
+  \*********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   selectBranchScene: () => (/* binding */ selectBranchScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+// src/services/scenes/warehouse/selectBranchScene.ts
+
+
+
+const selectBranchScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('select_branch_scene');
+selectBranchScene.enter(async (ctx) => {
+    var _a;
+    try {
+        // Получаем компании
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getCompanies();
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !(response === null || response === void 0 ? void 0 : response.data)) {
+            await ctx.reply('Нет доступных филиалов');
+            return ctx.scene.enter('warehouse');
+        }
+        const companies = response.data;
+        // Создаем кнопки для каждого филиала
+        const buttons = companies.map(company => [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(company.title, `select_branch_${company.id}`)
+        ]);
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')
+        ]);
+        const messageText = 'Выберите филиал для просмотра товаров:';
+        if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
+            await ctx.editMessageText(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+        else {
+            await ctx.reply(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in selectBranchScene.enter:', error);
+        await ctx.reply('Произошла ошибка при загрузке списка филиалов');
+        return ctx.scene.enter('warehouse');
+    }
+});
+selectBranchScene.action(/^select_branch_(\d+)$/, async (ctx) => {
+    try {
+        const branchId = ctx.match[1];
+        // Сохраняем в общей сессии вместо scene.session
+        ctx.session.selectedBranchId = branchId;
+        console.log('Selected branch ID in selection:', {
+            branchId,
+            session: ctx.session
+        });
+        await ctx.answerCbQuery('Филиал выбран');
+        return ctx.scene.enter('products_scene');
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in branch selection:', error);
+        await ctx.reply('Произошла ошибка при выборе филиала');
+        return ctx.scene.enter('select_branch_scene');
+    }
+});
+selectBranchScene.action('back_to_warehouse', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('warehouse'); // Теперь возвращаемся в основное меню склада
+});
+selectBranchScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/tasksScene.ts":
+/*!**************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/tasksScene.ts ***!
+  \**************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   tasksScene: () => (/* binding */ tasksScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+
+const tasksScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('tasks');
+// Инициализация состояния при входе в сцену
+tasksScene.enter(async (ctx) => {
+    if (!ctx.scene.state) {
+        ctx.scene.state = {
+            tasksState: {
+                page: 1,
+                filter: 'active'
+            }
+        };
+    }
+    else {
+        ctx.scene.state.tasksState = {
+            page: 1,
+            filter: 'active'
+        };
+    }
+    await showTasks(ctx);
+});
+async function showTasks(ctx) {
+    var _a, _b, _c, _d;
+    try {
+        const state = ctx.scene.state.tasksState;
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getTasks({
+            page: state.page,
+            per_page: 5,
+            filter: state.filter
+        });
+        const tasks = ((_a = response === null || response === void 0 ? void 0 : response.data) === null || _a === void 0 ? void 0 : _a.data) || [];
+        const total = ((_b = response === null || response === void 0 ? void 0 : response.data) === null || _b === void 0 ? void 0 : _b.total) || 0;
+        const totalPages = Math.ceil(total / 5) || 1;
+        // Проверяем валидность текущей страницы
+        if (state.page > totalPages) {
+            state.page = totalPages;
+        }
+        // Если нет задач
+        if (!tasks.length) {
+            const message = state.filter === 'completed'
+                ? '📋 Нет выполненных задач'
+                : '📋 Список задач пуст';
+            if (ctx.callbackQuery) {
+                try {
+                    await ctx.editMessageText(message, buildMainMenuKeyboard());
+                }
+                catch (error) {
+                    if (!((_c = error.message) === null || _c === void 0 ? void 0 : _c.includes('message is not modified'))) {
+                        await ctx.reply(message, buildMainMenuKeyboard());
+                    }
+                }
+            }
+            else {
+                await ctx.reply(message, buildMainMenuKeyboard());
+            }
+            return;
+        }
+        // Формируем заголовок
+        const headerText = [
+            '📋 Задачи',
+            '',
+            `Всего задач: ${total}`,
+            `Страница: ${state.page}/${totalPages}`,
+            '',
+            'Выберите задачу для просмотра:'
+        ].join('\n');
+        // Формируем клавиатуру
+        const keyboard = [
+            // Задачи
+            ...tasks.map(task => ([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${getStatusEmoji(task.status)} ${task.title.substring(0, 35)}${task.title.length > 35 ? '...' : ''}`, `view_task_${task.id}`)
+            ])),
+            // Навигация (показываем только если есть больше одной страницы)
+            ...(totalPages > 1 ? [[
+                    ...(state.page > 1 ? [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⬅️ Назад', 'prev_page')] : []),
+                    ...(state.page < totalPages ? [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('➡️ Вперёд', 'next_page')] : [])
+                ]] : []),
+            // Фильтры
+            [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(state.filter === 'active' ? '🔵 Активные' : '⚪️ Активные', 'filter_active'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(state.filter === 'completed' ? '🔵 Выполненные' : '⚪️ Выполненные', 'filter_completed')
+            ],
+            // Кнопка возврата в меню
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'mainmenu')]
+        ].filter(row => row.length > 0); // Убираем пустые ряды
+        const markup = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(keyboard);
+        // Отправляем или обновляем сообщение
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(headerText, markup);
+            }
+            catch (error) {
+                if (!((_d = error.message) === null || _d === void 0 ? void 0 : _d.includes('message is not modified'))) {
+                    console.error('Error updating message:', error);
+                    // Если не удалось обновить, отправляем новое
+                    await ctx.reply(headerText, markup);
+                }
+            }
+        }
+        else {
+            await ctx.reply(headerText, markup);
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in showTasks:', error);
+        const errorMessage = '❌ Произошла ошибка при загрузке задач';
+        if (ctx.callbackQuery) {
+            try {
+                await ctx.editMessageText(errorMessage, buildMainMenuKeyboard());
+            }
+            catch (_e) {
+                await ctx.reply(errorMessage, buildMainMenuKeyboard());
+            }
+        }
+        else {
+            await ctx.reply(errorMessage, buildMainMenuKeyboard());
+        }
+    }
+}
+// Добавим новый обработчик
+tasksScene.action(/^get_master_photo_(\d+)$/, async (ctx) => {
+    try {
+        const taskId = parseInt(ctx.match[1], 10);
+        const task = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getTaskById(taskId);
+        if (!(task === null || task === void 0 ? void 0 : task.data)) {
+            await ctx.answerCbQuery('❌ Задача не найдена');
+            return;
+        }
+        await ctx.answerCbQuery('🔍 Получаем фото...');
+        const photoResult = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getMasterPhoto(task.data.master_phone);
+        if (!photoResult.success) {
+            await ctx.reply('❌ ' + (photoResult.message || 'Ошибка получения фото мастера'), telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться к задаче', `view_task_${taskId}`)
+                ]]));
+            return;
+        }
+        const messageText = `
+🖼 Актуальное фото мастера:
+👤 ${task.data.master_name}
+📱 ${task.data.master_phone}
+
+${photoResult.data.photo_url}
+`.trim();
+        await ctx.reply(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться к задаче', `view_task_${taskId}`)
+            ]]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in get_master_photo handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка');
+    }
+});
+// Просмотр задачи
+tasksScene.action(/^view_task_(\d+)$/, async (ctx) => {
+    try {
+        const taskId = parseInt(ctx.match[1], 10);
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getTaskById(taskId);
+        if (!(response === null || response === void 0 ? void 0 : response.data)) {
+            await ctx.answerCbQuery('❌ Задача не найдена');
+            return;
+        }
+        const task = response.data;
+        // Форматируем сообщение в виде строки, а не массива
+        const messageText = `
+📋 Задача #${task.id}
+
+📝 Название: ${task.title}
+👤 Мастер: ${task.master_name || 'Не указан'}
+${task.master_phone ? `📱 Телефон: ${task.master_phone}` : ''}
+🔄 Статус: ${getStatusText(task.status)}
+⏰ Создано: ${formatDate(task.created_at)}
+${task.deadline ? `⚠️ Дедлайн: ${formatDate(task.deadline)}` : ''}
+${task.completed_at ? `✅ Выполнено: ${formatDate(task.completed_at)}` : ''}
+
+${task.description ? `📄 Описание: ${task.description}` : ''}
+`.trim();
+        const keyboard = [];
+        if (task.status !== 'completed') {
+            keyboard.push([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Отметить выполненной', `complete_task_${task.id}`)
+            ]);
+            if (task.status === 'pending') {
+                keyboard.push([
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Взять в работу', `progress_task_${task.id}`)
+                ]);
+            }
+        }
+        if (task.type === 'photo_update') {
+            keyboard.push([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🖼 Получить фото мастера', `get_master_photo_${task.id}`)
+            ]);
+        }
+        keyboard.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к списку', 'back_to_tasks')]);
+        keyboard.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 В главное меню', 'mainmenu')]);
+        await ctx.editMessageText(messageText, Object.assign({ parse_mode: 'HTML' }, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(keyboard)));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in view_task handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка при загрузке задачи');
+    }
+});
+// Обработчики действий с задачами
+tasksScene.action(/^complete_task_(\d+)$/, async (ctx) => {
+    try {
+        const taskId = parseInt(ctx.match[1], 10);
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].completeTask(taskId);
+        if (result === null || result === void 0 ? void 0 : result.success) {
+            await ctx.answerCbQuery('✅ Задача отмечена как выполненная');
+            await showTasks(ctx);
+        }
+        else {
+            await ctx.answerCbQuery('❌ Не удалось обновить статус задачи');
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in complete_task handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка');
+    }
+});
+tasksScene.action(/^progress_task_(\d+)$/, async (ctx) => {
+    try {
+        const taskId = parseInt(ctx.match[1], 10);
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].updateTaskStatus(taskId, 'in_progress');
+        if (result === null || result === void 0 ? void 0 : result.success) {
+            await ctx.answerCbQuery('✅ Задача взята в работу');
+            await showTasks(ctx);
+        }
+        else {
+            await ctx.answerCbQuery('❌ Не удалось обновить статус задачи');
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in progress_task handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка');
+    }
+});
+// Навигация и фильтры
+tasksScene.action('prev_page', async (ctx) => {
+    if (ctx.scene.state.tasksState.page > 1) {
+        ctx.scene.state.tasksState.page--;
+    }
+    await ctx.answerCbQuery();
+    await showTasks(ctx);
+});
+tasksScene.action('next_page', async (ctx) => {
+    ctx.scene.state.tasksState.page++;
+    await ctx.answerCbQuery();
+    await showTasks(ctx);
+});
+tasksScene.action('filter_active', async (ctx) => {
+    ctx.scene.state.tasksState.filter = 'active';
+    ctx.scene.state.tasksState.page = 1;
+    await ctx.answerCbQuery('🔵 Показаны активные задачи');
+    await showTasks(ctx);
+});
+tasksScene.action('filter_completed', async (ctx) => {
+    ctx.scene.state.tasksState.filter = 'completed';
+    ctx.scene.state.tasksState.page = 1;
+    await ctx.answerCbQuery('🔵 Показаны выполненные задачи');
+    await showTasks(ctx);
+});
+tasksScene.action('back_to_tasks', async (ctx) => {
+    await ctx.answerCbQuery();
+    await showTasks(ctx);
+});
+tasksScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+// Вспомогательные функции
+function getStatusEmoji(status) {
+    return {
+        'pending': '⏳',
+        'in_progress': '🔄',
+        'completed': '✅'
+    }[status] || '❓';
+}
+function getStatusText(status) {
+    return {
+        'pending': 'Ожидает выполнения',
+        'in_progress': 'В процессе',
+        'completed': 'Выполнена'
+    }[status] || 'Неизвестно';
+}
+function formatDate(date) {
+    return new Date(date).toLocaleString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+function buildMainMenuKeyboard() {
+    return telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'mainmenu')
+        ]]);
+}
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (tasksScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/warehouseNotificationsListScene.ts":
+/*!***********************************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/warehouseNotificationsListScene.ts ***!
+  \***********************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   warehouseNotificationsListScene: () => (/* binding */ warehouseNotificationsListScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+
+const warehouseNotificationsListScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('warehouse_notifications_list');
+warehouseNotificationsListScene.enter(async (ctx) => {
+    var _a, _b, _c;
+    try {
+        const branchId = parseInt(ctx.session.selectedBranchId, 10);
+        // Добавляем логирование
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Fetching warehouse notifications:', {
+            telegramId: ctx.from.id,
+            branchId: branchId
+        });
+        // Получаем все активные уведомления
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getWarehouseNotifications(ctx.from.id, branchId);
+        // Добавляем проверку ответа
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Notifications response:', response);
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !((_b = (_a = response === null || response === void 0 ? void 0 : response.data) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.length)) {
+            await ctx.reply('Нет активных уведомлений об остатках', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_warehouse')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]));
+            return;
+        }
+        const notifications = response.data.data;
+        const buttons = notifications.map(notification => {
+            var _a;
+            return [
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${notification.product.title} | ${((_a = notification.company) === null || _a === void 0 ? void 0 : _a.title) || 'Неизвестный филиал'} (мин: ${notification.min_amount})`, `notification_${notification.id}`)
+            ];
+        });
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_warehouse'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')
+        ]);
+        const messageText = 'Выберите товар чтобы изменить или удалить отслеживание:';
+        if ((_c = ctx.callbackQuery) === null || _c === void 0 ? void 0 : _c.message) {
+            await ctx.editMessageText(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+        else {
+            await ctx.reply(messageText, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in warehouseNotificationsListScene.enter:', error);
+        await ctx.reply('Произошла ошибка при загрузке уведомлений');
+    }
+});
+warehouseNotificationsListScene.action(/^notification_(\d+)$/, async (ctx) => {
+    try {
+        const notificationId = parseInt(ctx.match[1], 10);
+        // Добавим логирование
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Fetching single notification:', { notificationId });
+        // Вызываем специальный метод для получения одного уведомления
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getWarehouseNotification(notificationId); // Изменим метод
+        if (!(response === null || response === void 0 ? void 0 : response.success) || !(response === null || response === void 0 ? void 0 : response.data)) {
+            throw new Error('Notification not found');
+        }
+        const notification = response.data;
+        ctx.session.selectedNotificationId = notificationId;
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Изменить мин. кол-во', 'edit_amount')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🗑 Удалить уведомление', 'delete_notification')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_list')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]);
+        await ctx.editMessageText(`[${notification.product.title}]\n` +
+            `Фактическое кол-во на складе: ${notification.current_amount}\n` +
+            `Мин. кол-во для уведомления: ${notification.min_amount}`, keyboard);
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error displaying notification:', error);
+        await ctx.reply('Произошла ошибка при загрузке информации об уведомлении');
+    }
+});
+// Обработчики действий
+warehouseNotificationsListScene.action('edit_amount', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.reply('Введите новое минимальное количество для уведомления:');
+    ctx.session.isEditing = true; // Устанавливаем флаг редактирования
+});
+// Добавляем обработчик текстовых сообщений
+// В обработчике текстовых сообщений
+warehouseNotificationsListScene.on('text', async (ctx) => {
+    if (ctx.session.isEditing) {
+        try {
+            const newAmount = parseInt(ctx.message.text, 10);
+            if (isNaN(newAmount) || newAmount < 0) {
+                await ctx.reply('Пожалуйста, введите корректное положительное число');
+                return;
+            }
+            const notificationId = ctx.session.selectedNotificationId;
+            // Добавим проверку наличия ID уведомления
+            if (!notificationId) {
+                throw new Error('ID уведомления не найден');
+            }
+            // Добавим логирование
+            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Updating notification:', {
+                notificationId,
+                newAmount
+            });
+            // Обновляем уведомление
+            const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].updateWarehouseNotification(notificationId, { min_amount: newAmount });
+            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Update response:', response);
+            if (!(response === null || response === void 0 ? void 0 : response.success)) {
+                throw new Error((response === null || response === void 0 ? void 0 : response.message) || 'Не удалось обновить уведомление');
+            }
+            // Получаем обновлённое уведомление
+            const updatedNotification = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getWarehouseNotification(notificationId);
+            if (!(updatedNotification === null || updatedNotification === void 0 ? void 0 : updatedNotification.success)) {
+                throw new Error('Не удалось получить обновленное уведомление');
+            }
+            // Возвращаем к просмотру уведомления
+            const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Изменить мин. кол-во', 'edit_amount')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🗑 Удалить уведомление', 'delete_notification')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_list')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+            ]);
+            await ctx.reply(`✅ Минимальное количество обновлено!\n\n` +
+                `[${updatedNotification.data.product.title}]\n` +
+                `Фактическое кол-во на складе: ${updatedNotification.data.current_amount}\n` +
+                `Мин. кол-во для уведомления: ${newAmount}`, keyboard);
+            // Сбрасываем флаг редактирования
+            ctx.session.isEditing = false;
+        }
+        catch (error) {
+            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error updating notification amount:', error);
+            await ctx.reply('Произошла ошибка при обновлении минимального количества: ' + error.message);
+            ctx.session.isEditing = false;
+        }
+    }
+});
+warehouseNotificationsListScene.action('delete_notification', async (ctx) => {
+    await ctx.answerCbQuery();
+    // Показываем подтверждение удаления
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Да, удалить', 'confirm_delete'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отмена', 'cancel_delete')
+        ]
+    ]);
+    await ctx.editMessageText('Вы уверены, что хотите удалить это уведомление?', keyboard);
+});
+warehouseNotificationsListScene.action('confirm_delete', async (ctx) => {
+    try {
+        const notificationId = ctx.session.selectedNotificationId;
+        await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].deleteWarehouseNotification(notificationId);
+        await ctx.editMessageText('Товар удален из отслеживания.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Все уведомления', 'back_to_list')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error deleting notification:', error);
+        await ctx.reply('Произошла ошибка при удалении уведомления');
+    }
+});
+warehouseNotificationsListScene.action('cancel_delete', async (ctx) => {
+    await ctx.answerCbQuery('Отменено');
+    return ctx.scene.reenter();
+});
+warehouseNotificationsListScene.action('back_to_warehouse', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('warehouse');
+});
+warehouseNotificationsListScene.action('back_to_list', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter();
+});
+warehouseNotificationsListScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (warehouseNotificationsListScene);
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/warehouseScene.ts":
+/*!******************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/warehouseScene.ts ***!
+  \******************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   warehouseScene: () => (/* binding */ warehouseScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+
+
+const warehouseScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('warehouse');
+warehouseScene.enter(async (ctx) => {
+    var _a;
+    try {
+        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📝 Уведомление на остаток', 'create_notification')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Работа с остатком', 'manage_notifications')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🏠 Главное меню', 'mainmenu')]
+        ]);
+        const messageText = 'Выберите действие:';
+        if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
+            await ctx.editMessageText(messageText, keyboard);
+        }
+        else {
+            await ctx.reply(messageText, keyboard);
+        }
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error in warehouseScene.enter:', error);
+        await ctx.reply('Произошла ошибка при загрузке меню');
+    }
+});
+// Перенаправление на создание уведомления
+warehouseScene.action('create_notification', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('select_branch_scene');
+});
+// Перенаправление на управление существующими уведомлениями
+warehouseScene.action('manage_notifications', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('warehouse_notifications_list');
+});
+warehouseScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (warehouseScene);
 
 
 /***/ }),
@@ -2103,10 +4482,10 @@ handleDateTimeInput,
 // Step 5: Save type and sucecss
 handleNotificationTypeInput);
 createNotifictationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 createNotifictationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 
 
@@ -2352,10 +4731,10 @@ handleDateTimeInput,
 // Step 5: Save type and sucecss
 handleNotificationTypeInput);
 editNotificationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 editNotificationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 
 
@@ -2426,196 +4805,6 @@ const notificationListHandler = async (ctx) => {
 
 /***/ }),
 
-/***/ "./src/telegraf/services/scenes/notifications/notificationsListScene.ts":
-/*!******************************************************************************!*\
-  !*** ./src/telegraf/services/scenes/notifications/notificationsListScene.ts ***!
-  \******************************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
-/* harmony export */   notificationsListScene: () => (/* binding */ notificationsListScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_3__);
-
-
-
-
-const notificationsListScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('active_notifications');
-// Since type is always 'notifications', no need for type mapping
-const listNotifications = async (ctx) => {
-    // Initialize page number in session if not set
-    if (!ctx.session.searchRequestsPage) {
-        ctx.session.searchRequestsPage = 1;
-    }
-    _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Entered searchRequestsScene', { session: ctx.scene.session });
-    const currentPage = ctx.session.searchRequestsPage;
-    const perPage = 1; // Adjust as needed
-    const typeText = 'уведомлений'; // Since type is always 'notifications'
-    const messageTextHeader = `🫡 Список активных заявок на ${typeText} (Страница ${currentPage})`;
-    try {
-        // Fetch paginated notifications
-        const paginatedNotifications = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getNotificationsByTelegramId(ctx.from.id, currentPage, perPage, 'notification' // Fixed type
-        );
-        console.log('paginatedNotifications:', paginatedNotifications);
-        if (!paginatedNotifications || paginatedNotifications.data.length === 0) {
-            const noNotificationsText = `📭 У вас нет активных ${typeText}.`;
-            const noKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-            ]);
-            if (ctx.callbackQuery && ctx.callbackQuery.message) {
-                await ctx.editMessageText(noNotificationsText, noKeyboard);
-            }
-            else {
-                await ctx.reply(noNotificationsText, noKeyboard);
-            }
-            return;
-        }
-        let notification;
-        try {
-            notification = paginatedNotifications.data[0];
-        }
-        catch (error) {
-            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error getting notifications:', error);
-            await ctx.answerCbQuery('Произошла ошибка [0]', {
-                show_alert: true,
-            });
-            return;
-        }
-        const name = notification.settings.name;
-        const sum = notification.settings.sum;
-        const dateTime = notification.settings.dateTime;
-        const notificationType = notification.settings.type;
-        // Assuming 'status' field exists
-        const statusText = notification.status === 'started'
-            ? 'ищем'
-            : (notification.status === 'finished' ? 'нашли' : 'вышло время');
-        // Format the notification message
-        const messageText = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.fmt) `
-🫡 ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Список активных ${typeText}`}
-
-${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Название:`} ${name}
-${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Сумма:`} ${sum}
-${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Время:`} ${dateTime}
-${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Тип:`} ${notificationType}
-${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.bold) `Статус:`} ${statusText}
-
-Страница: ${currentPage} из ${paginatedNotifications.last_page}
-        `;
-        // Build pagination buttons
-        const buttons = [];
-        const buttonsPagination = [];
-        if (paginatedNotifications.prev_page_url) {
-            buttonsPagination.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⬅️', 'notifications_prev'));
-        }
-        if (paginatedNotifications.next_page_url) {
-            buttonsPagination.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('➡️', 'notifications_next'));
-        }
-        const buttonDelete = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Удалить', `delete_${notification.id}`);
-        const buttonEdit = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✏️ Редактировать', `edit_${notification.id}`);
-        buttons.push([buttonDelete]);
-        buttons.push([buttonEdit]);
-        if (buttonsPagination.length > 0) {
-            buttons.push(buttonsPagination);
-        }
-        // Always show 'Main Menu' and 'Back' buttons
-        buttons.push([
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter'),
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu'),
-        ]);
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons, { columns: 2 }); // Adjust columns as per button arrangement
-        ctx.session.notifications = paginatedNotifications.data;
-        if (ctx.callbackQuery && ctx.callbackQuery.message) {
-            try {
-                // Edit existing message if interaction is from a callback query
-                await ctx.editMessageText(messageText, Object.assign(Object.assign({}, keyboard), { parse_mode: 'Markdown' }));
-            }
-            catch (error) {
-                _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error sending notifications message:', error);
-                await ctx.reply(messageText, Object.assign(Object.assign({}, keyboard), { parse_mode: 'Markdown' }));
-            }
-        }
-        else {
-            // Otherwise, send a new message
-            await ctx.reply(messageText, Object.assign(Object.assign({}, keyboard), { parse_mode: 'Markdown' }));
-        }
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error getting notifications:', error);
-    }
-};
-notificationsListScene.enter(async (ctx) => {
-    // Since there's only one type, no need to ask user to select type
-    await listNotifications(ctx);
-});
-const listNotificationsAction = async (ctx) => {
-    await listNotifications(ctx);
-};
-notificationsListScene.action('notifications_next', async (ctx) => {
-    if (ctx.session.searchRequestsPage) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].info('Incrementing page number');
-        ctx.session.searchRequestsPage += 1;
-        await listNotificationsAction(ctx);
-    }
-    else {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].warn('Page number not set');
-        // If for some reason the page isn't set, reset to page 1
-        ctx.session.searchRequestsPage = 1;
-        await ctx.scene.reenter();
-    }
-});
-// Handle 'Previous' button callback
-notificationsListScene.action('notifications_prev', async (ctx) => {
-    if (ctx.session.searchRequestsPage && ctx.session.searchRequestsPage > 1) {
-        ctx.session.searchRequestsPage -= 1;
-        await listNotificationsAction(ctx);
-    }
-    else {
-        await ctx.answerCbQuery('Вы уже на первой странице.', { show_alert: true });
-    }
-});
-notificationsListScene.action(/delete_(.*)/, async (ctx) => {
-    const notificationId = ctx.match[1];
-    try {
-        await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].deleteNotification(notificationId);
-        await ctx.answerCbQuery('Заявка удалена', { show_alert: true });
-        await ctx.scene.reenter();
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error deleting notification:', error);
-        await ctx.answerCbQuery('Произошла ошибка при удалении заявки.', { show_alert: true });
-    }
-});
-notificationsListScene.action(/edit_(.*)/, async (ctx) => {
-    const notificationId = ctx.match[1];
-    ctx.session.notificationId = notificationId;
-    console.log('notificationId:', notificationId);
-    console.log('ctx.session.notifications:', ctx.session.notifications);
-    console.log('ctx.session.notifications.find((n: any) => n.id == notificationId):', ctx.session.notifications.find((n) => n.id == notificationId).settings.name);
-    ctx.session.notificationForm = {
-        id: notificationId,
-        name: ctx.session.notifications.find((n) => n.id == notificationId).settings.name,
-        sum: ctx.session.notifications.find((n) => n.id == notificationId).settings.sum,
-        dateTime: ctx.session.notifications.find((n) => n.id == notificationId).settings.dateTime,
-        type: ctx.session.notifications.find((n) => n.id == notificationId).settings.type,
-    };
-    await ctx.scene.enter('edit_notification');
-});
-notificationsListScene.action('reenter', async (ctx) => {
-    await ctx.scene.reenter();
-});
-/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (notificationsListScene);
-
-
-/***/ }),
-
 /***/ "./src/telegraf/services/scenes/notifications/notificationsScene.ts":
 /*!**************************************************************************!*\
   !*** ./src/telegraf/services/scenes/notifications/notificationsScene.ts ***!
@@ -2641,87 +4830,16 @@ const noKeyboard = [
     [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
 ];
 notifictationsScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 notifictationsScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 notifictationsScene.action('create_notification', async (ctx) => {
     await ctx.scene.enter('create_notification');
 });
 notifictationsScene.action('active_notifications', async (ctx) => {
     await ctx.scene.enter('active_notifications');
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/salary/salaryActions.ts":
-/*!**************************************************************!*\
-  !*** ./src/telegraf/services/scenes/salary/salaryActions.ts ***!
-  \**************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-
-const defaultButtons = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const enterHandler = async (ctx) => {
-    const messageText = `Тут будет расчет зп`;
-    const buttonsArray = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([...defaultButtonsMenuOnly]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, buttonsArray);
-        }
-        catch (error) {
-            await ctx.reply(messageText, buttonsArray);
-        }
-    }
-    else {
-        await ctx.reply(messageText, buttonsArray);
-    }
-};
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/salary/salaryScene.ts":
-/*!************************************************************!*\
-  !*** ./src/telegraf/services/scenes/salary/salaryScene.ts ***!
-  \************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   salaryScene: () => (/* binding */ salaryScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _salaryActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./salaryActions */ "./src/telegraf/services/scenes/salary/salaryActions.ts");
-
-
-const salaryScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('salary');
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-// Define the enter handler
-salaryScene.enter(async (ctx) => {
-    await (0,_salaryActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
-});
-salaryScene.action('reenter', async (ctx) => {
-    await ctx.scene.reenter();
 });
 
 
@@ -2868,930 +4986,6 @@ staffScene.action(/^user_(\d+)$/, async (ctx) => {
     ctx.scene.session.user_id = user_id;
     return (0,_staffActions__WEBPACK_IMPORTED_MODULE_1__.userBlockHandler)(ctx);
 });
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/tasks/tasksActions.ts":
-/*!************************************************************!*\
-  !*** ./src/telegraf/services/scenes/tasks/tasksActions.ts ***!
-  \************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler),
-/* harmony export */   taskBlockHandler: () => (/* binding */ taskBlockHandler)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_3__);
-
-
-
-
-const defaultButtons = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const enterHandler = async (ctx) => {
-    const page = ctx.session.page || 1; // Store page in session for navigation
-    const perPage = 10; // Adjust perPage if needed
-    try {
-        const productData = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getTaskByTelegramId(ctx.from.id, page, perPage);
-        console.log('productData', productData);
-        if (!productData || productData.tasks.length === 0) {
-            await ctx.reply('Нет доступных товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-            ]));
-            return ctx.wizard.next();
-        }
-        const { tasks, currentPage, totalPages } = productData;
-        // Generate buttons for products
-        const buttons = tasks.map(task => {
-            const statusEmoji = task.status == 'open' ? '🟡' : '🟢';
-            return [
-                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(statusEmoji + ' ' + task.name, `task_${task.id}`)
-            ];
-        });
-        // Add navigation buttons
-        const navigationButtons = [];
-        if (currentPage > 1) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('← Назад', `tasks_page_${currentPage - 1}`));
-        }
-        if (currentPage < totalPages) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Вперед →', `tasks_page_${currentPage + 1}`));
-        }
-        if (navigationButtons.length) {
-            buttons.push(navigationButtons);
-        }
-        buttons.push(...defaultButtonsMenuOnly);
-        const message = `[задачи]
-
-В этом блоке будут все задачи
-
-[списком в кнопках выводи задачи]`;
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons);
-        try {
-            await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                    is_disabled: true
-                } }));
-            await ctx.answerCbQuery('Введите сумму для оплаты');
-        }
-        catch (error) {
-            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-            await ctx.reply(message, keyboard);
-        }
-        await ctx.answerCbQuery();
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error fetching products:', error);
-        await ctx.reply('Произошла ошибка при загрузке товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-        ]));
-    }
-};
-const taskBlockHandler = async (ctx) => {
-    const task_id = ctx.scene.session.task_id;
-    try {
-        const tasks = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getTaskById(ctx.from.id, task_id);
-        const task = tasks[0];
-        const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.fmt) `
-        [задача]
-Название: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.name)}
-Описание: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.description)}
-Описание: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.description)}
-Номер задачи: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.task_number)}
-Ответственный: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.responsible)}
-Срок: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.deadline)}
-Дата назначения: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.assigned_date)}
-Статус: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_3__.code)(task.status)}
-`;
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Закрыть задачу', 'close_task')],
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-        ]);
-        try {
-            await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                    is_disabled: true
-                } }));
-            await ctx.answerCbQuery('Загрузка товаров');
-        }
-        catch (error) {
-            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-            await ctx.reply(message, keyboard);
-        }
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error fetching products:', error);
-        await ctx.reply('Произошла ошибка при загрузке задач', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-        ]));
-    }
-};
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/tasks/tasksScene.ts":
-/*!**********************************************************!*\
-  !*** ./src/telegraf/services/scenes/tasks/tasksScene.ts ***!
-  \**********************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   tasksScene: () => (/* binding */ tasksScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _tasksActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./tasksActions */ "./src/telegraf/services/scenes/tasks/tasksActions.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-
-
-
-const tasksScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('tasks');
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-// Define the enter handler
-tasksScene.enter(async (ctx) => {
-    await (0,_tasksActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
-});
-tasksScene.action('reenter', async (ctx) => {
-    await ctx.scene.reenter();
-});
-tasksScene.action(/^products_page_(\d+)$/, async (ctx) => {
-    const page = parseInt(ctx.match[1], 10);
-    ctx.session.page = page;
-    return (0,_tasksActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx); // Reload the handler with the new page
-});
-//task_(*
-tasksScene.action(/^task_(\d+)$/, async (ctx) => {
-    const task_id = parseInt(ctx.match[1], 10);
-    ctx.scene.session.task_id = task_id;
-    return (0,_tasksActions__WEBPACK_IMPORTED_MODULE_1__.taskBlockHandler)(ctx);
-});
-tasksScene.action('close_task', async (ctx) => {
-    const task_id = ctx.scene.session.task_id;
-    _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].closeTask(task_id, ctx.from.id);
-    // Close the task
-    await ctx.reply('Задача закрыта');
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/createNotificationActions.ts":
-/*!*****************************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/createNotificationActions.ts ***!
-  \*****************************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler),
-/* harmony export */   promptForDateTime: () => (/* binding */ promptForDateTime),
-/* harmony export */   promptForNotificationType: () => (/* binding */ promptForNotificationType),
-/* harmony export */   promptForSum: () => (/* binding */ promptForSum),
-/* harmony export */   sendSuccessMessage: () => (/* binding */ sendSuccessMessage)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-
-
-
-
-const defaultButtons = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const enterHandler = async (ctx) => {
-    const page = ctx.session.page || 1; // Store page in session for navigation
-    const perPage = 10; // Adjust perPage if needed
-    ctx.scene.session.notificationForm.product_id = null;
-    ctx.scene.session.notificationForm.product_name = null;
-    ctx.scene.session.notificationForm.sum = null;
-    ctx.scene.session.notificationForm.type = null;
-    try {
-        const productData = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].getProductsByTelegramId(ctx.from.id, page, perPage);
-        if (!productData || productData.products.length === 0) {
-            await ctx.reply('Нет доступных товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-            ]));
-            return ctx.wizard.next();
-        }
-        const { products, currentPage, totalPages } = productData;
-        // Generate buttons for products
-        const buttons = products.map(product => [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(product.title, `warehouse_product_${product.good_id}`)
-        ]);
-        // Add navigation buttons
-        const navigationButtons = [];
-        if (currentPage > 1) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('← Назад', `products_page_${currentPage - 1}`));
-        }
-        if (currentPage < totalPages) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Вперед →', `products_page_${currentPage + 1}`));
-        }
-        if (navigationButtons.length) {
-            buttons.push(navigationButtons);
-        }
-        buttons.push(...defaultButtonsMenuOnly);
-        const message = 'Выберите товар, для которого нужно отслеживать остаток:';
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons);
-        try {
-            await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                    is_disabled: true
-                } }));
-            await ctx.answerCbQuery('Введите сумму для оплаты');
-        }
-        catch (error) {
-            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-            await ctx.reply(message, keyboard);
-        }
-        await ctx.answerCbQuery();
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error fetching products:', error);
-        await ctx.reply('Произошла ошибка при загрузке товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-        ]));
-    }
-};
-const promptForSum = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Назад', 'warehouse_notification')],
-    ]);
-    const product_name = ctx.scene.session.notificationForm.product_name;
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Введите минимальное количество для товара ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(product_name)}`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Минимальное количество для товара');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-    return ctx.wizard.next();
-};
-const promptForDateTime = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Введите дату и время уведомления в формате:
-dd.mm.yyyy hh:mm`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Введите дату и время уведомления');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-    return ctx.wizard.next();
-};
-const promptForNotificationType = async (ctx) => {
-    //keyboard one time or constant notification
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Одноразовое уведомление', 'notification_one_time')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Постоянное уведомление', 'notification_constant')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Уведомление разовое или постоянное?`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Выберите тип уведомления');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-    return ctx.wizard.next();
-};
-const sendSuccessMessage = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Создать еще', 'create_notification')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Все уведомления', 'active_notifications')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `
-    Вы установили минимальное количество для товара ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.product_name)} : ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.sum)}. 
-
-Как только остаток товара достигнет этого количества, вы получите уведомление.
-`;
-    try {
-        await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].createNotificationByTelegramId(ctx.from.id, ctx.scene.session.notificationForm, 'product_balance');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error creating notification:', error);
-        await ctx.reply('Произошла ошибка при создании уведомления. Пожалуйста, попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(defaultButtonsMenuOnly));
-    }
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Уведомление создано');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-};
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/createNotificationScene.ts":
-/*!***************************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/createNotificationScene.ts ***!
-  \***************************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   createNotifictationScene: () => (/* binding */ createNotifictationScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _createNotificationActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./createNotificationActions */ "./src/telegraf/services/scenes/warehouse/createNotificationActions.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-
-
-
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const handleSumInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-handleSumInput.on('text', async (ctx) => {
-    const sum = ctx.message.text;
-    ctx.scene.session.notificationForm.sum = sum;
-    console.log('ctx.scene.session.notificationForm', ctx.scene.session.notificationForm);
-    await (0,_createNotificationActions__WEBPACK_IMPORTED_MODULE_1__.sendSuccessMessage)(ctx);
-});
-const createNotifictationScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('warehouse_create_notification', 
-// Step 1: Prompt to enter name
-async (ctx) => {
-    ctx.scene.session.notificationForm = {
-        name: null,
-        sum: null,
-        dateTime: null,
-        type: null,
-    };
-    await (0,_createNotificationActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
-}, 
-// Step 3: Save sum and prompt to enter date
-handleSumInput);
-createNotifictationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
-});
-createNotifictationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
-});
-createNotifictationScene.action(/^products_page_(\d+)$/, async (ctx) => {
-    const page = parseInt(ctx.match[1], 10);
-    ctx.session.page = page;
-    return (0,_createNotificationActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx); // Reload the handler with the new page
-});
-createNotifictationScene.action(/^warehouse_product_(\d+)$/, async (ctx) => {
-    console.log('warehouse_product_');
-    const product_id = parseInt(ctx.match[1], 10);
-    console.log('product_id', product_id);
-    ctx.scene.session.notificationForm.product_id = product_id;
-    const products = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getProductsByTelegramId(ctx.from.id);
-    const product = products.allProducts.find(product => product.good_id === product_id);
-    ctx.scene.session.notificationForm.product_name = product.title;
-    await (0,_createNotificationActions__WEBPACK_IMPORTED_MODULE_1__.promptForSum)(ctx);
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/editNotificationActions.ts":
-/*!***************************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/editNotificationActions.ts ***!
-  \***************************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   deleteNotification: () => (/* binding */ deleteNotification),
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler),
-/* harmony export */   promptForAction: () => (/* binding */ promptForAction),
-/* harmony export */   promptForDateTime: () => (/* binding */ promptForDateTime),
-/* harmony export */   promptForNotificationType: () => (/* binding */ promptForNotificationType),
-/* harmony export */   promptForSum: () => (/* binding */ promptForSum),
-/* harmony export */   sendSuccessMessage: () => (/* binding */ sendSuccessMessage)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! telegraf/format */ "telegraf/format");
-/* harmony import */ var telegraf_format__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(telegraf_format__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-/* harmony import */ var _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../../../utils/redis/Cache/Cache */ "./src/utils/redis/Cache/Cache.ts");
-
-
-
-
-
-const defaultButtons = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const enterHandler = async (ctx) => {
-    const page = ctx.session.page || 1; // Store page in session for navigation
-    const perPage = 10; // Adjust perPage if needed
-    ctx.scene.session.notificationForm.product_id = null;
-    ctx.scene.session.notificationForm.product_name = null;
-    ctx.scene.session.notificationForm.sum = null;
-    ctx.scene.session.notificationForm.type = null;
-    try {
-        await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_4__["default"].forgetByPattern(`notifications_product_balance_telegram_id_${ctx.from.id}_page_*`);
-        const notificationData = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].getNotificationsByTelegramId(ctx.from.id, page, perPage, 'product_balance');
-        if (!notificationData || notificationData.data.length === 0) {
-            await ctx.reply('Нет доступных товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-            ]));
-            return ctx.wizard.next();
-        }
-        const { data, current_page, last_page: total } = notificationData;
-        // Generate buttons for products
-        const buttons = data.map(notification => [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(notification.settings.product_name, `edit_warehouse_product_${notification.id}`)
-        ]);
-        // Add navigation buttons
-        const navigationButtons = [];
-        if (current_page > 1) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('← Назад', `edit_products_page_${current_page - 1}`));
-        }
-        if (current_page < total) {
-            navigationButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Вперед →', `edit_products_page_${current_page + 1}`));
-        }
-        if (navigationButtons.length) {
-            buttons.push(navigationButtons);
-        }
-        buttons.push(...defaultButtonsMenuOnly);
-        const message = `Выберите товар чтобы изменить или удалить отслеживание:`;
-        const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons);
-        try {
-            await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                    is_disabled: true
-                } }));
-            await ctx.answerCbQuery('Введите товар');
-        }
-        catch (error) {
-            _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-            await ctx.reply(message, keyboard);
-        }
-        await ctx.answerCbQuery();
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error fetching products:', error);
-        await ctx.reply('Произошла ошибка при загрузке товаров.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')]
-        ]));
-    }
-    return ctx.wizard.next();
-};
-const promptForSum = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Назад', 'warehouse_product_' + ctx.scene.session.notificationForm.product_id)],
-    ]);
-    const product_name = ctx.scene.session.notificationForm.product_name;
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Введите минимальное количество для товара ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(product_name)}`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Минимальное количество для товара');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-};
-const promptForAction = async (ctx) => {
-    var _a;
-    const product = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].getOneProductByTelegramId(ctx.from.id, ctx.scene.session.notificationForm.product_id);
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Изменить минимальное количество', 'change_minimal_sum')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Удалить уведомление', 'delete_notification')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const amount = (_a = product.actual_amounts[0].amount) !== null && _a !== void 0 ? _a : 0;
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `
-Название товара - ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.product_name)} 
-Фактическое кол-во на складе - ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(amount)}
-Мин кол-во для уведомления: ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.sum)}`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Выберите действие');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-};
-const promptForDateTime = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Пропустить', 'notification_skip_date')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Введите дату и время уведомления в формате:
-dd.mm.yyyy hh:mm
-
- ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.bold)('Текущая дата и время: ')} ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.session.notificationForm.dateTime)}
- 
- Введите новую дату и время или нажмите пропустить
-`;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Введите дату и время уведомления');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-    return ctx.wizard.next();
-};
-const promptForNotificationType = async (ctx) => {
-    //keyboard one time or constant notification
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Пропустить', 'notification_skip_type')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Одноразовое уведомление', 'notification_one_time')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Постоянное уведомление', 'notification_constant')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `Уведомление разовое или постоянное?
-    
-    ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.bold)('Текущий тип уведомления: ')} ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.session.notificationForm.type)}
-    
-    Выберите тип уведомления или нажмите пропустить
-    `;
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Выберите тип уведомления');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-    return ctx.wizard.next();
-};
-const deleteNotification = async (ctx) => {
-    try {
-        await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].deleteNotification(ctx.scene.session.notificationForm.notification_id);
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error deleting notification:', error);
-        await ctx.reply('Произошла ошибка при удалении уведомления. Пожалуйста, попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(defaultButtonsMenuOnly));
-    }
-    await ctx.reply('Уведомление удалено', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(defaultButtonsMenuOnly));
-};
-const sendSuccessMessage = async (ctx) => {
-    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Все уведомления', 'active_notifications')],
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Главное меню', 'mainmenu')],
-    ]);
-    const message = (0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.fmt) `
-    Вы установили минимальное количество для товара ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.product_name)} : ${(0,telegraf_format__WEBPACK_IMPORTED_MODULE_1__.code)(ctx.scene.session.notificationForm.sum)}. 
-
-Как только остаток товара достигнет этого количества, вы получите уведомление.
-`;
-    try {
-        await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].updateNotificationById(ctx.scene.session.notificationForm.notification_id, ctx.scene.session.notificationForm);
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error creating notification:', error);
-        await ctx.reply('Произошла ошибка при создании уведомления. Пожалуйста, попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(defaultButtonsMenuOnly));
-    }
-    try {
-        await ctx.editMessageText(message, Object.assign(Object.assign({}, keyboard), { link_preview_options: {
-                is_disabled: true
-            } }));
-        await ctx.answerCbQuery('Уведомление создано');
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error sending autobooking message:', error);
-        await ctx.reply(message, keyboard);
-    }
-};
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/editNotificationScene.ts":
-/*!*************************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/editNotificationScene.ts ***!
-  \*************************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   editNotificationScene: () => (/* binding */ editNotificationScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _editNotificationActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./editNotificationActions */ "./src/telegraf/services/scenes/warehouse/editNotificationActions.ts");
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
-
-
-
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const handleActionInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-const handleSumInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-handleSumInput.on('text', async (ctx) => {
-    const sum = ctx.message.text;
-    ctx.scene.session.notificationForm.sum = sum;
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.sendSuccessMessage)(ctx);
-});
-const handleDateTimeInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-handleDateTimeInput.on('text', async (ctx) => {
-    ctx.scene.session.notificationForm.dateTime = ctx.message.text;
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.promptForNotificationType)(ctx);
-});
-//notification_skip_date
-handleDateTimeInput.action('notification_skip_date', async (ctx) => {
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.promptForNotificationType)(ctx);
-});
-const handleNotificationTypeInput = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();
-handleNotificationTypeInput.action('notification_one_time', async (ctx) => {
-    ctx.scene.session.notificationForm.type = 'one_time';
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.sendSuccessMessage)(ctx);
-});
-//notification_skip_type
-handleNotificationTypeInput.action('notification_skip_type', async (ctx) => {
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.sendSuccessMessage)(ctx);
-});
-handleNotificationTypeInput.action('notification_constant', async (ctx) => {
-    ctx.scene.session.notificationForm.type = 'constant';
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.sendSuccessMessage)(ctx);
-});
-const editNotificationScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.WizardScene('warehouse_edit_notification', 
-// Step 1: Prompt to enter name
-async (ctx) => {
-    ctx.scene.session.notificationForm = {
-        name: null,
-        sum: null,
-        dateTime: null,
-        type: null,
-    };
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
-}, 
-// Step 2: Save name and prompt to enter sum
-handleActionInput, 
-// Step 3: Save sum and prompt to enter date
-handleSumInput);
-editNotificationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
-});
-editNotificationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
-});
-editNotificationScene.action(/^products_page_(\d+)$/, async (ctx) => {
-    const page = parseInt(ctx.match[1], 10);
-    ctx.session.page = page;
-    return (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx); // Reload the handler with the new page
-});
-handleActionInput.action(/^edit_warehouse_product_(\d+)$/, async (ctx) => {
-    const notification_id = parseInt(ctx.match[1], 10);
-    ctx.scene.session.notificationForm.notification_id = notification_id;
-    const productData = await _services_laravelService__WEBPACK_IMPORTED_MODULE_2__["default"].getNotificationsByTelegramId(ctx.from.id, 1, 1, 'product_balance', notification_id);
-    const notification = productData.data.find(notification => notification.id === notification_id);
-    if (notification.settings.product_name) {
-        ctx.scene.session.notificationForm.product_name = notification.settings.product_name;
-    }
-    if (notification.settings.sum) {
-        ctx.scene.session.notificationForm.sum = notification.settings.sum;
-    }
-    if (notification.settings.product_id) {
-        ctx.scene.session.notificationForm.product_id = notification.settings.product_id;
-    }
-    if (notification.settings.type) {
-        ctx.scene.session.notificationForm.type = notification.settings.type;
-    }
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.promptForAction)(ctx);
-});
-handleActionInput.action('change_minimal_sum', async (ctx) => {
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.promptForSum)(ctx);
-    return ctx.wizard.next();
-});
-// delete
-handleActionInput.action('delete_notification', async (ctx) => {
-    await (0,_editNotificationActions__WEBPACK_IMPORTED_MODULE_1__.deleteNotification)(ctx);
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/warehouseActions.ts":
-/*!********************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/warehouseActions.ts ***!
-  \********************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   enterHandler: () => (/* binding */ enterHandler)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-
-const defaultButtons = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Уведомление на остаток', 'warehouse_notification')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Работа с остатком', 'warehouse_list')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const defaultButtonsMenuOnly = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-const enterHandler = async (ctx) => {
-    ctx.session.page = 1; // Store page in session for navigation
-    const messageText = `Выберите действие`;
-    const buttonsArray = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([...defaultButtons]);
-    if (ctx.callbackQuery && ctx.callbackQuery.message) {
-        try {
-            // If the interaction is from a callback query, edit the existing message
-            await ctx.editMessageText(messageText, buttonsArray);
-        }
-        catch (error) {
-            await ctx.reply(messageText, buttonsArray);
-        }
-    }
-    else {
-        await ctx.reply(messageText, buttonsArray);
-    }
-};
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/scenes/warehouse/warehouseScene.ts":
-/*!******************************************************************!*\
-  !*** ./src/telegraf/services/scenes/warehouse/warehouseScene.ts ***!
-  \******************************************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   warehouseScene: () => (/* binding */ warehouseScene)
-/* harmony export */ });
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
-/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _warehouseActions__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./warehouseActions */ "./src/telegraf/services/scenes/warehouse/warehouseActions.ts");
-
-
-const warehouseScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('warehouse');
-const noKeyboard = [
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'reenter')],
-    [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👌 Главное меню', 'mainmenu')],
-];
-// Define the enter handler
-warehouseScene.enter(async (ctx) => {
-    await (0,_warehouseActions__WEBPACK_IMPORTED_MODULE_1__.enterHandler)(ctx);
-});
-warehouseScene.action('warehouse_notification', async (ctx) => {
-    await ctx.scene.enter('warehouse_create_notification');
-});
-warehouseScene.action('warehouse_list', async (ctx) => {
-    await ctx.scene.enter('warehouse_edit_notification');
-});
-warehouseScene.action('reenter', async (ctx) => {
-    await ctx.scene.reenter();
-});
-
-
-/***/ }),
-
-/***/ "./src/telegraf/services/warehouseBot.ts":
-/*!***********************************************!*\
-  !*** ./src/telegraf/services/warehouseBot.ts ***!
-  \***********************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
-/* harmony export */ });
-/* harmony import */ var _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../utils/redis/Cache/Cache */ "./src/utils/redis/Cache/Cache.ts");
-
-class WarehouseBot {
-    constructor(bot) {
-        this.bot = bot;
-    }
-    async handleStart(chatId) {
-        const message = "⚡Я автоматически нахожу и бронирую доступные слоты на складах Wildberries. Выбирайте удобный тариф и бронируйте поставки." +
-            "\n\nВыберите пункт в меню 👇";
-        const keyboard = {
-            inline_keyboard: [
-                [
-                    { text: '📦 Автобронирование', callback_data: 'wh_notification' },
-                ],
-                [
-                    { text: '⚡ Поиск слотов', callback_data: 'wh_notification' },
-                    { text: '📝 Заявки на поиск слотов', callback_data: 'wh_notification' },
-                ],
-                [
-                    { text: '🙌 Мои кабинеты', callback_data: 'wh_payment' },
-                    { text: '💎 Подписка', callback_data: 'wh_payment' },
-                ],
-                [
-                    { text: '💬 Поддержка', url: 'https://t.me/dmitrynovikov21' },
-                    { text: '📍 Инструкции', url: 'https://t.me/dmitrynovikov21' },
-                ],
-            ],
-        };
-        await this.bot.telegram.sendMessage(chatId, message, {
-            parse_mode: 'HTML',
-            reply_markup: keyboard,
-        });
-    }
-    async fetchUserByTelegramId(telegramId) {
-        try {
-            return await _utils_redis_Cache_Cache__WEBPACK_IMPORTED_MODULE_0__["default"].getUserByTelegramId(telegramId);
-        }
-        catch (error) {
-            console.error('Error fetching user:', error);
-            return null;
-        }
-    }
-}
-/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (WarehouseBot);
-
-
-/***/ }),
-
-/***/ "./src/telegraf/utils/cabinetGate.ts":
-/*!*******************************************!*\
-  !*** ./src/telegraf/utils/cabinetGate.ts ***!
-  \*******************************************/
-/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
-
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   cabinetGate: () => (/* binding */ cabinetGate)
-/* harmony export */ });
-/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../services/laravelService */ "./src/services/laravelService.ts");
-/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
-
-
-const cabinetGate = async (ctx, scene) => {
-    let user = null;
-    try {
-        user = await _services_laravelService__WEBPACK_IMPORTED_MODULE_0__["default"].getUserByTelegramId(ctx.from.id, 10);
-    }
-    catch (error) {
-        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_1__["default"].error('Error getting user:', error);
-        await ctx.reply('Произошла ошибка при получении данных пользователя. Попробуйте позже');
-    }
-    if (!user) {
-        await ctx.reply('Пользователь не найден. Пожалуйста, зарегистрируйтесь');
-        return;
-    }
-    // if no phone then auth
-    if (!user.phone_number) {
-        await ctx.scene.enter('login_wizard');
-        return;
-    }
-    ctx.session.user = user;
-    console.log('user', user);
-    await ctx.scene.enter(scene, { user });
-};
 
 
 /***/ }),
@@ -4588,6 +5782,16 @@ module.exports = require("bull");
 
 /***/ }),
 
+/***/ "date-fns-tz":
+/*!******************************!*\
+  !*** external "date-fns-tz" ***!
+  \******************************/
+/***/ ((module) => {
+
+module.exports = require("date-fns-tz");
+
+/***/ }),
+
 /***/ "form-data":
 /*!****************************!*\
   !*** external "form-data" ***!
@@ -4595,6 +5799,26 @@ module.exports = require("bull");
 /***/ ((module) => {
 
 module.exports = require("form-data");
+
+/***/ }),
+
+/***/ "moment":
+/*!*************************!*\
+  !*** external "moment" ***!
+  \*************************/
+/***/ ((module) => {
+
+module.exports = require("moment");
+
+/***/ }),
+
+/***/ "moment-timezone":
+/*!**********************************!*\
+  !*** external "moment-timezone" ***!
+  \**********************************/
+/***/ ((module) => {
+
+module.exports = require("moment-timezone");
 
 /***/ }),
 

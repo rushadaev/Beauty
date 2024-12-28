@@ -6,27 +6,38 @@ import { MyContext, MySession } from "../types/MyContext";
 
 // Импорты сцен управляющего
 import { adminMainScene } from '../services/bot-admin/scenes/adminMainScene';
-import { tasksScene } from '../services/scenes/tasks/tasksScene';
 import { cabinetGate } from "../utils/cabinetGate";
-import { salaryScene } from "../services/scenes/salary/salaryScene";
+import { salaryScene } from "../services/bot-admin/scenes/salaryScene";
 import { notifictationsScene } from "../services/scenes/notifications/notificationsScene";
-import { employmentScene } from "../services/scenes/employment/employmentScene";
-import { warehouseScene } from "../services/scenes/warehouse/warehouseScene";
+import { employmentScene } from "../services/bot-admin/scenes/employmentScene";
 import { staffScene } from "../services/scenes/staff/staffScene";
 import { adminLoginWizard } from '../services/bot-admin/scenes/adminLoginWizard';
 
 // Импорты сцен уведомлений
 import { createNotifictationScene as notificationsCreateNotificationScene } from "../services/scenes/notifications/createNotificationScene";
-import { notificationsListScene } from "../services/scenes/notifications/notificationsListScene";
 import { editNotificationScene as notificationsEditNotificationScene } from "../services/scenes/notifications/editNotificationScene";
 
-// Импорты сцен склада
-import { createNotifictationScene as warehouseCreateNotificationScene } from "../services/scenes/warehouse/createNotificationScene";
-import { editNotificationScene as warehouseEditNotificationScene } from "../services/scenes/warehouse/editNotificationScene";
+// Импорты сцен склад
+
+import { selectBranchScene } from '../services/bot-admin/scenes/selectBranchScene';
+import { productsScene } from '../services/bot-admin/scenes/productsScene';
+import { createWarehouseNotificationScene } from '../services/bot-admin/scenes/createWarehouseNotificationScene';
+import { warehouseScene } from '../services/bot-admin/scenes/warehouseScene';
+import { warehouseNotificationsListScene } from '../services/bot-admin/scenes/warehouseNotificationsListScene';
+import { notificationsManagementScene } from '../services/bot-admin/scenes/notificationsManagementScene';
+import { notificationsCreateScene } from '../services/bot-admin/scenes/notificationsCreateScene';
+import { remindLaterScene } from '../services/bot-admin/scenes/remindLaterScene';
+import { notificationsListScene } from '../services/bot-admin/scenes/notificationsListScene';
+import { tasksScene } from  '../services/bot-admin/scenes/tasksScene';
+
+
+interface BaseState {
+    notificationId?: string;
+}
 
 const botToken: string = process.env.TELEGRAM_BOT_TOKEN_SUPPLIES_NEW!;
 const bot: Telegraf<MyContext> = new Telegraf(botToken);
-const warehouseBot = new WarehouseBot(bot);
+
 
 const store = RedisStore<MySession>({
     url: 'redis://redis:6379/2',
@@ -36,7 +47,6 @@ const store = RedisStore<MySession>({
 const stage = new Scenes.Stage<MyContext>([
     adminLoginWizard,
     adminMainScene,
-    tasksScene,
     salaryScene,
     notifictationsScene,
     notificationsCreateNotificationScene,
@@ -45,8 +55,15 @@ const stage = new Scenes.Stage<MyContext>([
     warehouseScene,
     staffScene,
     notificationsEditNotificationScene,
-    warehouseCreateNotificationScene,
-    warehouseEditNotificationScene
+    selectBranchScene,
+    productsScene,
+    createWarehouseNotificationScene,
+    warehouseNotificationsListScene,
+    notificationsManagementScene,
+    notificationsCreateScene,
+    remindLaterScene,
+    notificationsListScene,
+    tasksScene,
 ]);
 
 // Middleware
@@ -68,6 +85,31 @@ bot.action('mainmenu', async (ctx: MyContext) => {
     await ctx.answerCbQuery('🏦 Главное меню');
 });
 
+
+
+// Обновляем обработчик
+bot.action(/remind_later_(\d+)/, async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        
+        const notificationId = ctx.match[1];
+        logger.info('Starting remind later process:', {
+            notification_id: notificationId
+        });
+
+        // Инициализируем state если его нет
+        if (!ctx.scene.state) {
+            ctx.scene.state = {};
+        }
+
+        await ctx.scene.enter('remind_later_scene', { notificationId });
+        
+    } catch (error) {
+        logger.error('Error in remind_later handler:', error);
+        await ctx.answerCbQuery('❌ Произошла ошибка');
+    }
+});
+
 // Обработка команды /ping
 bot.command('ping', (ctx: MyContext) => {
     ctx.reply('pong!');
@@ -79,7 +121,7 @@ bot.action('create_notification', async (ctx) => {
 });
 
 bot.action('active_notifications', async (ctx) => {
-    await ctx.scene.enter('active_notifications');
+    await ctx.scene.enter('notifications_list_scene');
 });
 
 // Обработчики склада

@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use App\Models\APIKey;
 use App\Policies\APIKeyPolicy;
+use App\Services\SalaryExportService;
+use App\Services\YClientsService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -14,7 +16,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(SalaryExportService::class, function ($app) {
+            return new SalaryExportService($app->make(YClientsService::class));
+        });
     }
 
     /**
@@ -22,7 +26,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        
         // Register the policy manually
         Gate::policy(APIKey::class, APIKeyPolicy::class);
 

@@ -15,12 +15,19 @@ export interface NotificationSettings {
 
 export interface Notification {
     id: number;
-    user_id: number;
-    settings: NotificationSettings;
-    status: string;
+    telegram_id: number;
+    name: string;
+    sum?: number;
+    notification_datetime: string;
+    type: 'single' | 'recurring';
+    frequency?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    frequency_value?: number;
+    is_active: boolean;
+    last_notification_sent_at?: string | null;
     created_at: string;
     updated_at: string;
-}
+    next_notification?: string | null;
+   }
 
 export interface PaginatedNotifications {
     current_page: number;

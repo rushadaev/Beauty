@@ -105,8 +105,8 @@ export const createNotifictationScene = new Scenes.WizardScene<MyContext>(
 );
 
 createNotifictationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 createNotifictationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });

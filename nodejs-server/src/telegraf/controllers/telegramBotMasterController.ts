@@ -53,27 +53,34 @@ botMaster.use(async (ctx: MyContext, next: () => Promise<void>) => {
 
 // Handle /start command
 botMaster.start(async (ctx: MyContext) => {
+    // Очищаем сессию при старте
+    if (ctx.session) {
+        ctx.session = {}; // Сбрасываем сессию
+    }
+    
     const startPayload = ctx.payload;
 
-    if (startPayload) {
-        if(startPayload === 'registration') {
-            await ctx.scene.enter('registration_wizard');
-            return;
-        }
-        await cabinetGate(ctx, 'main');
-        return;
-    } else {
-        await cabinetGate(ctx, 'main');
+    if (startPayload && startPayload === 'registration') {
+        // Если есть payload registration, идем сразу на регистрацию
+        await ctx.scene.enter('registration_wizard');
         return;
     }
 
+    // В остальных случаях всегда идем на login_wizard
+    await ctx.scene.enter('login_wizard');
 });
 
 // Handle 'mainmenu' action
 botMaster.action('mainmenu', async (ctx: MyContext) => {
-    //if user authenticated then show main menu else show login menu
-    await cabinetGate(ctx, 'main');
+    // Проверяем авторизацию
+    if (!ctx.session?.user?.token) {
+        // Если нет токена - отправляем на логин
+        await ctx.scene.enter('login_wizard');
+        return;
+    }
 
+    // Если есть токен - показываем главное меню
+    await cabinetGate(ctx, 'main');
     await ctx.answerCbQuery('🏦Главная');
 });
 

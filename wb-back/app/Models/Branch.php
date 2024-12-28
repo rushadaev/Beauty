@@ -21,7 +21,8 @@ class Branch extends Model
         'description',
         'email',
         'city',
-        'timezone_name'
+        'timezone_name',
+        'branch_id'  // добавляем новое поле
     ];
 
     protected $casts = [

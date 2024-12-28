@@ -8,6 +8,18 @@ import { RegistrationSession } from '../telegraf/types/RegistrationSession';
 import FormData from 'form-data';
 import * as fs from 'node:fs';
 
+interface NotificationResponse {
+    success: boolean;
+    message?: string;
+    data?: any;
+}
+
+interface GetTasksParams {
+    page?: number;
+    per_page?: number;
+    filter?: 'active' | 'completed' | 'all';
+}
+
 export interface Product {
     good_id: number;
     title: string;
@@ -40,11 +52,16 @@ export interface AuthResponse {
 }
 
 interface TaskPaginatedResponse {
-    actual_amounts: any;
-    currentPage: number;
-    totalPages: number;
-    tasks: any;
-    allTasks: any;
+    success: boolean; // Добавляем поле success
+    data: {
+        current_page: number;
+        data: Task[];
+        total: number;
+        per_page: number;
+    };
+    meta: {
+        total: number;
+    };
 }
 
 // Добавляем интерфейсы
@@ -74,8 +91,79 @@ interface ScheduleResponse {
     };
 }
 
+interface WarehouseNotification {
+    company: any;
+    success: any;
+    product: any;
+    id: number;
+    telegram_id: number;
+    company_id: number;
+    product_id: number;
+    min_amount: number;
+    is_active: boolean;
+    last_notification_sent_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+interface WarehouseNotificationForm {
+    productId: number | string;
+    minAmount: number;
+    type: 'warehouse';
+    branchId: string | number; // Добавляем поле
+}
+
+interface PaginatedWarehouseNotifications {
+    min_amount: any;
+    current_amount: any;
+    product: any;
+    success: boolean;
+    data: {
+        current_page: number;
+        data: WarehouseNotification[];
+        total: number;
+        per_page: number;
+    };
+}
+
+interface Task {
+    deadline: any;
+    id: number;
+    title: string;
+    description: string | null;
+    status: 'pending' | 'in_progress' | 'completed';
+    type: 'schedule_update' | 'photo_update' | 'description_update' | 'other';
+    master_phone: string | null;
+    master_name: string | null;
+    completed_at: string | null;
+    priority: number;
+    created_at: string;
+    updated_at: string;
+}
+
+interface TaskResponse {
+    status: string;
+    success: boolean;
+    data: Task;
+    message?: string;
+}
+
+interface TasksResponse {
+    success: boolean;
+    data: {
+        current_page: number;
+        data: Task[];
+        total: number;
+        per_page: number;
+    };
+    meta: {
+        total: number;
+    };
+}
+
 class LaravelService {
     private laravelApiUrl: string;
+    
 
     constructor() {
         const apiUrl = process.env.LARAVEL_API_URL;
@@ -83,6 +171,225 @@ class LaravelService {
             throw new Error('LARAVEL_API_URL is not defined in environment variables.');
         }
         this.laravelApiUrl = apiUrl;
+    }
+
+    public async getTasks(params: GetTasksParams): Promise<TaskPaginatedResponse> {
+        try {
+            const response = await axios.get<TaskPaginatedResponse>(
+                `${this.laravelApiUrl}/admin-tasks`,
+                { params }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching tasks:', error);
+            throw error;
+        }
+    }
+
+    public async sendTaskNotificationToAdmin(taskId: number): Promise<void> {
+        try {
+            // Отправляем уведомление через NodeJS API
+            await axios.post(`${this.laravelApiUrl}/admin-notifications/send`, {
+                task_id: taskId,
+                type: 'new_task'
+            });
+        } catch (error) {
+            console.error('Error sending notification to admin:', error);
+        }
+    }
+
+    public async getMasterPhoto(phone: string): Promise<any> {
+        try {
+            const response = await axios.post(`${this.laravelApiUrl}/masters/get-photo`, {
+                phone: phone
+            });
+    
+            return response.data;
+    
+        } catch (error) {
+            console.error('Error getting master photo:', error);
+            return {
+                success: false,
+                message: 'Ошибка при получении фото мастера'
+            };
+        }
+    }
+    
+    public async getTaskById(id: number): Promise<TaskResponse> {
+        try {
+            const response = await axios.get<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${id}`
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching task:', error);
+            throw error;
+        }
+    }
+    
+    public async completeTask(taskId: number): Promise<TaskResponse> {
+        try {
+            const response = await axios.post<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}/complete`
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error completing task:', error);
+            throw error;
+        }
+    }
+    
+    public async updateTaskStatus(
+        taskId: number, 
+        status: 'pending' | 'in_progress' | 'completed'
+    ): Promise<TaskResponse> {
+        try {
+            const response = await axios.put<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}/status`,
+                { status }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error updating task status:', error);
+            throw error;
+        }
+    }
+    
+    async createTaskForMaster({
+        type,
+        masterPhone,
+        masterName,
+        description = null
+    }: {
+        type: 'schedule_update' | 'photo_update' | 'description_update';
+        masterPhone: string;
+        masterName: string;
+        description?: string | null;
+    }): Promise<TaskResponse> {
+        try {
+            // Формируем заголовок в зависимости от типа задачи
+            const titles = {
+                'description_update': `Обновить описание мастера ${masterName}`,
+                'photo_update': `Обновить фото мастера ${masterName}`,
+                'schedule_update': `Обновить расписание мастера ${masterName}`
+            };
+    
+            const response = await axios.post<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks`,
+                {
+                    type,
+                    master_phone: masterPhone,
+                    master_name: masterName,
+                    description,
+                    title: titles[type]
+                }
+            );
+
+            if (response.data.success && response.data.data) {
+                // Отправляем уведомление админам
+                await this.sendAdminNotification(response.data.data.id, type);
+            }
+    
+            return response.data;
+        } catch (error) {
+            console.error('Error creating task for master:', error);
+            throw error;
+        }
+    }
+
+    private async sendAdminNotification(taskId: number, type: string): Promise<void> {
+        try {
+            await axios.post(`${this.laravelApiUrl}/admin-notifications/send`, {
+                task_id: taskId,
+                type: type
+            });
+        } catch (error) {
+            console.error('Error sending admin notification:', error);
+            // Не выбрасываем ошибку, чтобы не прерывать основной процесс
+        }
+    }
+
+    public async getMasterByPhone(phone: string): Promise<{ name: string; id: number } | null> {
+        try {
+            const response = await axios.post(
+                `${this.laravelApiUrl}/masters/info`,
+                { phone }
+            );
+    
+            if (response.data.success) {
+                return {
+                    name: response.data.data.name,
+                    id: response.data.data.id
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Error getting master info:', error);
+            return null;
+        }
+    }
+    
+    public async deleteTask(taskId: number): Promise<{ success: boolean; message?: string }> {
+        try {
+            const response = await axios.delete(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}`
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error deleting task:', error);
+            throw error;
+        }
+    }
+    
+    // Метод для изменения приоритета задачи
+    public async updateTaskPriority(
+        taskId: number,
+        priority: number
+    ): Promise<TaskResponse> {
+        try {
+            const response = await axios.put<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}/priority`,
+                { priority }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error updating task priority:', error);
+            throw error;
+        }
+    }
+    
+    // Метод для добавления комментария к задаче
+    public async addTaskComment(
+        taskId: number,
+        comment: string
+    ): Promise<TaskResponse> {
+        try {
+            const response = await axios.post<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}/comments`,
+                { comment }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error adding task comment:', error);
+            throw error;
+        }
+    }
+    
+    // Метод для обновления дедлайна задачи
+    public async updateTaskDeadline(
+        taskId: number,
+        deadline: string
+    ): Promise<TaskResponse> {
+        try {
+            const response = await axios.put<TaskResponse>(
+                `${this.laravelApiUrl}/admin-tasks/${taskId}/deadline`,
+                { deadline }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error updating task deadline:', error);
+            throw error;
+        }
     }
 
     /**
@@ -108,6 +415,111 @@ class LaravelService {
             return null;
         }
     }
+
+    // Создание уведомления об остатках
+    public async createWarehouseNotification(
+        telegramId: number,
+        data: WarehouseNotificationForm
+    ): Promise<WarehouseNotification | null> {
+        try {
+            const response = await axios.post<{ success: boolean; data: WarehouseNotification }>(
+                `${this.laravelApiUrl}/warehouse-notifications`,
+                {
+                    telegram_id: telegramId,
+                    product_id: data.productId,
+                    min_amount: data.minAmount,
+                    branch_id: data.branchId // Добавляем branch_id
+                }
+            );
+    
+            if (!response.data.success) {
+                throw new Error('Failed to create warehouse notification');
+            }
+    
+            return response.data.data;
+        } catch (error) {
+            console.error('Error creating warehouse notification:', error);
+            throw error;
+        }
+    }
+
+    public async getWarehouseNotification(id: number): Promise<any> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/warehouse-notifications/${id}`
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error getting single warehouse notification:', error);
+            return null;
+        }
+    }
+
+    // Получение списка уведомлений
+    public async getWarehouseNotifications(
+        telegramId: number,
+        branchId: number | null = null,
+        page: number = 1,
+        perPage: number = 10
+    ): Promise<PaginatedWarehouseNotifications | null> {
+        try {
+            console.log('Fetching warehouse notifications:', { telegramId, branchId, page, perPage });
+            
+            const response = await axios.get<PaginatedWarehouseNotifications>(
+                `${this.laravelApiUrl}/warehouse-notifications`,
+                {
+                    params: {
+                        telegram_id: telegramId,
+                        branch_id: branchId,
+                        page,
+                        per_page: perPage
+                    }
+                }
+            );
+    
+            console.log('Warehouse notifications response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error getting warehouse notifications:', error);
+            return null;
+        }
+    }
+
+    // Обновление уведомления
+    public async updateWarehouseNotification(
+        id: number,
+        data: { min_amount: number }
+    ): Promise<any> {
+        try {
+            const response = await axios.put(
+                `${this.laravelApiUrl}/warehouse-notifications/${id}`,
+                data
+            );
+    
+            // Если получили ответ с данными - значит запрос успешен
+            return {
+                success: true,
+                data: response.data
+            };
+        } catch (error) {
+            throw new Error('Failed to update notification');
+        }
+    }
+
+    // Удаление уведомления
+    public async deleteWarehouseNotification(id: number): Promise<boolean> {
+        try {
+            const response = await axios.delete(
+                `${this.laravelApiUrl}/warehouse-notifications/${id}`
+            );
+
+            return response.data.success || false;
+        } catch (error) {
+            console.error('Error deleting warehouse notification:', error);
+            throw error;
+        }
+    }
+
 
     /**
      * Retrieves paginated notifications for a user by their Telegram ID.
@@ -140,27 +552,127 @@ class LaravelService {
         }
     }
 
-    public async createNotificationByTelegramId(
-        telegramId: number,
-        settings: any,
-        type: string = 'notification'
-    ): Promise<PaginatedNotifications | null> {
+    async rescheduleNotification(
+        notificationId: number, 
+        newDateTime: string
+    ): Promise<{ success: boolean; data?: any }> {
         try {
-            const response = await axios.post<PaginatedNotifications>(
-                `${this.laravelApiUrl}/notifications/telegram/${telegramId}`,
+            const response = await axios.patch(
+                `${this.laravelApiUrl}/admin-notifications/${notificationId}/reschedule`,
                 {
-                    settings:{
-                        ...settings,
-                        type
-                    }
+                    notification_datetime: newDateTime
                 }
             );
             return response.data;
         } catch (error) {
-            console.error('Error creating notification:', error);
-            throw new Error('Error creating notification');
+            console.error('Error rescheduling notification:', error);
+            throw error;
         }
     }
+
+    public async createNotificationByTelegramId(
+        telegramId: number,
+        settings: any
+    ): Promise<NotificationResponse> {
+        try {
+            const response = await axios.post<NotificationResponse>(
+                `${this.laravelApiUrl}/admin-notifications`,
+                {
+                    telegram_id: telegramId,
+                    name: settings.name,
+                    sum: settings.sum,
+                    notification_datetime: this.formatDateTime(settings.dateTime),
+                    type: settings.type,
+                    frequency: settings.frequency,
+                    frequency_value: settings.frequency_value,
+                    is_active: true
+                }
+            );
+    
+            if (!response.data.success) {
+                throw new Error('Failed to create notification');
+            }
+    
+            return response.data;
+        } catch (error) {
+            console.error('Error creating notification:', error);
+            throw error;
+        }
+    }
+    
+    // Вспомогательный метод для форматирования даты и времени
+    private formatDateTime(dateTimeStr: string): string {
+        const [date, time] = dateTimeStr.split(' ');
+        const [day, month, year] = date.split('.');
+        return `${year}-${month}-${day} ${time}:00`;
+    }
+
+    // Получение списка уведомлений
+public async getAdminNotifications(
+    telegramId: number,
+    page: number = 1,
+    perPage: number = 10
+): Promise<PaginatedNotifications | null> {
+    try {
+        const response = await axios.get<PaginatedNotifications>(
+            `${this.laravelApiUrl}/admin-notifications`,
+            {
+                params: {
+                    telegram_id: telegramId,
+                    page,
+                    per_page: perPage
+                }
+            }
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error getting admin notifications:', error);
+        return null;
+    }
+}
+
+// Получение конкретного уведомления
+public async getAdminNotification(id: number): Promise<any> {
+    try {
+        const response = await axios.get(
+            `${this.laravelApiUrl}/admin-notifications/${id}`
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error getting admin notification:', error);
+        return null;
+    }
+}
+
+// Обновление уведомления
+public async updateAdminNotification(
+    id: number,
+    settings: any
+): Promise<any> {
+    try {
+        const response = await axios.put(
+            `${this.laravelApiUrl}/admin-notifications/${id}`,
+            settings
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error updating admin notification:', error);
+        throw error;
+    }
+}
+
+// Удаление уведомления
+public async deleteAdminNotification(id: number): Promise<boolean> {
+    try {
+        const response = await axios.delete(
+            `${this.laravelApiUrl}/admin-notifications/${id}`
+        );
+        return response.data.success || false;
+    } catch (error) {
+        console.error('Error deleting admin notification:', error);
+        throw error;
+    }
+}
 
     public async updateNotificationById(
         notificationId: string | number,
@@ -342,21 +854,23 @@ class LaravelService {
     async getProductsByTelegramId(telegramId: number, page: number = 1, perPage: number = 10): Promise<ProductsPaginatedResponse> {
         const cacheKey = `products_telegram_id_${telegramId}`;
         try {
-            // Fetch products from cache or API
-            const products: any = await CacheService.rememberCacheValue(
+            // Получаем данные из кэша или API
+            const response: any = await CacheService.rememberCacheValue(
                 cacheKey,
                 () => this.fetchProductsFromApi(telegramId),
-                3600 * 24 // Cache expiration set to 24 hours (86400 seconds)
+                3600 * 24
             );
-
-            // Paginate products
+    
+            // Извлекаем массив продуктов из поля data
+            const products = Array.isArray(response?.data) ? response.data : [];
+    
+            // Пагинация
             const totalProducts = products.length;
             const totalPages = Math.ceil(totalProducts / perPage);
-            page = Math.max(1, Math.min(totalPages, page));
+            page = Math.max(1, Math.min(totalPages || 1, page));
             const start = (page - 1) * perPage;
             const currentProducts = products.slice(start, start + perPage);
-
-            // Prepare response with pagination details
+    
             return {
                 actual_amounts: undefined,
                 currentPage: page,
@@ -366,39 +880,91 @@ class LaravelService {
             };
         } catch (error) {
             console.error('Error fetching products:', error);
-            return null;
+            return {
+                actual_amounts: undefined,
+                currentPage: 1,
+                totalPages: 0,
+                products: [],
+                allProducts: []
+            };
         }
     }
 
     async getTaskByTelegramId(telegramId: number, page: number = 1, perPage: number = 10): Promise<TaskPaginatedResponse> {
         const cacheKey = `task_telegram_id_${telegramId}`;
         try {
-            // Fetch products from cache or API
-            const tasks: any = await CacheService.rememberCacheValue(
+            // Получаем задачи из кеша или API с правильной типизацией
+            const response: { data: Task[] } | null = await CacheService.rememberCacheValue(
                 cacheKey,
                 () => this.fetchTasksFromApi(telegramId),
-                10 // Cache expiration set to 24 hours (86400 seconds)
+                10
             );
-
-            // Paginate products
+    
+            if (!response || !Array.isArray(response.data)) {
+                return this.createEmptyResponse(page, perPage);
+            }
+    
+            // Пагинация
+            const tasks = response.data;
             const totalTasks = tasks.length;
-            const totalPages = Math.ceil(totalTasks / perPage);
-            page = Math.max(1, Math.min(totalPages, page));
-            const start = (page - 1) * perPage;
+            const totalPages = Math.max(1, Math.ceil(totalTasks / perPage));
+            const validPage = Math.max(1, Math.min(totalPages, page));
+            const start = (validPage - 1) * perPage;
             const currentTasks = tasks.slice(start, start + perPage);
-
-            // Prepare response with pagination details
+    
+            // Возвращаем данные в формате TaskPaginatedResponse
             return {
-                actual_amounts: undefined,
-                currentPage: page,
-                totalPages,
-                tasks: currentTasks,
-                allTasks: tasks
+                success: true,
+                data: {
+                    current_page: validPage,
+                    data: currentTasks,
+                    total: totalTasks,
+                    per_page: perPage
+                },
+                meta: {
+                    total: totalTasks
+                }
             };
         } catch (error) {
-            console.error('Error fetching tasks:', error);
-            return null;
+            console.error('Error fetching tasks:', {
+                error,
+                telegram_id: telegramId,
+                page,
+                per_page: perPage
+            });
+            
+            return this.createEmptyResponse(page, perPage);
         }
+    }
+    
+    // Вспомогательный метод для создания пустого ответа
+    private createEmptyResponse(page: number, perPage: number): TaskPaginatedResponse {
+        return {
+            success: false,
+            data: {
+                current_page: page,
+                data: [],
+                total: 0,
+                per_page: perPage
+            },
+            meta: {
+                total: 0
+            }
+        };
+    }
+    
+    // Типизированный метод для получения задач из API
+    private async fetchTasksFromApi(telegramId: number): Promise<{ data: Task[] }> {
+        const response = await axios.get<{ data: Task[] }>(
+            `${this.laravelApiUrl}/tasks`,
+            {
+                params: {
+                    telegram_id: telegramId
+                }
+            }
+        );
+        
+        return response.data;
     }
 
     async closeTask(taskId: number, telegramId: number): Promise<void> {
@@ -416,23 +982,7 @@ class LaravelService {
         }
     }
 
-    async getTaskById(telegramId: number, task_id: number): Promise<TaskPaginatedResponse> {
-        const cacheKey = `task_telegram_id_${telegramId}_task_id_${task_id}`;
-        try {
-            // Fetch products from cache or API
-            const task: any = await CacheService.rememberCacheValue(
-                cacheKey,
-                () => this.fetchTasksFromApi(telegramId, task_id),
-                10 // Cache expiration set to 24 hours (86400 seconds)
-            );
-
-            // Prepare response with pagination details
-            return task;
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            return null;
-        }
-    }
+   
 
     async getOneProductByTelegramId(telegramId: number, product_id: number): Promise<ProductPaginatedResponse> {
         const cacheKey = `product_telegram_id_${telegramId}_product_id_${product_id}`;
@@ -455,10 +1005,11 @@ class LaravelService {
     }
 
 
-    private async fetchProductsFromApi(telegramId: number, product_id: number = null): Promise<Product[]> {
-        try{
+    private async fetchProductsFromApi(telegramId: number, product_id: number = null): Promise<any> {
+        try {
             if (product_id === null) {
                 const response = await axios.get(`${this.laravelApiUrl}/yclients/goods/${telegramId}`);
+                // Возвращаем весь ответ, так как нам нужна структура с полями success, data, meta
                 return response.data;
             } else {
                 const response = await axios.get(`${this.laravelApiUrl}/yclients/goods/${telegramId}&product_id=${product_id}`);
@@ -471,20 +1022,7 @@ class LaravelService {
         }
     }
 
-    private async fetchTasksFromApi(telegramId: number, task_id: number = null): Promise<any> {
-        try {
-            if (task_id === null) {
-                const response = await axios.get(`${this.laravelApiUrl}/tasks?telegram_id=${telegramId}`);
-                return response.data;
-            } else {
-                const response = await axios.get(`${this.laravelApiUrl}/tasks?telegram_id=${telegramId}&task_id=${task_id}`);
-                return response.data;
-            }
-        } catch (error) {
-            console.error('Error fetching tasks:', error);
-            throw new Error('Error fetching tasks');
-        }
-    }
+   
 
     async getUsersByTelegramId(telegramId: number, page: number = 1, perPage: number = 10): Promise<any> {
         const cacheKey = `users_telegram_id_${telegramId}`;
@@ -535,6 +1073,13 @@ class LaravelService {
         }
     }
 
+    private getHeaders() {
+        return {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        };
+    }
+
     public async submitRegistration(data: RegistrationSession): Promise<any> {
         try {
             const formattedData = {
@@ -560,6 +1105,10 @@ class LaravelService {
                 education_cert_photo: data.educationCertPhoto,
                 is_self_employed: data.isSelfEmployed,
                 master_price: data.masterPrice, // Добавляем поле master_price
+                work_address: data.selectedBranch?.address, // Добавляем адрес филиала
+                branch_name: data.selectedBranch?.name,     // Добавляем название филиала
+                branch_id: data.selectedBranch?.id,         // Добавляем ID филиала
+                telegram_id: data.telegram_id, // Добавляем telegram_id
                 status: 'pending'
             };
     
@@ -573,6 +1122,32 @@ class LaravelService {
                     }
                 }
             );
+    
+            // Если регистрация успешна, отправляем уведомление
+            if (response.data?.success || response.status === 201) {
+                try {
+                    await axios.post(
+                        `${this.laravelApiUrl}/admin-notifications/employment`,
+                        {
+                            registration_id: response.data.data.id,
+                            type: 'new_registration'
+                        },
+                        {
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        }
+                    );
+                } catch (notificationError) {
+                    console.error('Error sending registration notification:', {
+                        error: notificationError,
+                        registrationId: response.data.data.id,
+                        response: notificationError.response?.data
+                    });
+                }
+            }
+    
             return response.data;
         } catch (error) {
             console.error('Error submitting registration:', error);
@@ -628,6 +1203,176 @@ class LaravelService {
         }
     }
 
+    public async getActiveRegistrations(): Promise<any[]> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/employee-registrations/pending`,
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data.data;
+        } catch (error) {
+            console.error('Error fetching active registrations:', error);
+            throw error;
+        }
+    }
+
+    
+    
+    public async getRegistrationDetails(id: string): Promise<any> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/employee-registrations/${id}`,
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data.data;
+        } catch (error) {
+            console.error('Error fetching registration details:', error);
+            throw error;
+        }
+    }
+    
+    public async sendEmploymentInvite(registrationId: string): Promise<any> {
+        try {
+            const response = await axios.post(
+                `${this.laravelApiUrl}/employee-registrations/${registrationId}/send-invite`,
+                {},
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error sending employment invite:', error);
+            throw error;
+        }
+    }
+
+    public async getMasterSalary(
+        telegramId: number,
+        startDate: string,
+        endDate: string
+    ): Promise<any> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/salary/master`,  // Исправленный URL
+                {
+                    params: {
+                        telegram_id: telegramId,
+                        start_date: startDate,
+                        end_date: endDate
+                    }
+                }
+            );
+    
+            return response.data;
+        } catch (error) {
+            console.error('Error getting master salary:', error);
+            throw error;
+        }
+    }
+
+    public async exportSalaryReport(): Promise<Buffer> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/salary/export`,
+                {
+                    responseType: 'arraybuffer',
+                    headers: this.getHeaders()
+                }
+            );
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error exporting salary:', error);
+            throw error;
+        }
+    }
+    
+    public async createStaffProfile(registrationId: string): Promise<any> {
+        try {
+            const response = await axios.post(
+                `${this.laravelApiUrl}/employee-registrations/${registrationId}/create-staff-after-invite`,
+                {},
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error creating staff profile:', error);
+            throw error;
+        }
+    }
+    
+    public async getRegistrationDocuments(id: string): Promise<any[]> {
+        try {
+            console.log('Fetching documents for registration:', id);
+            const response = await axios.get(
+                `${this.laravelApiUrl}/employee-registrations/${id}/documents`,
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            console.log('Documents response:', response.data);
+            return response.data.data;
+        } catch (error) {
+            console.error('Error fetching registration documents:', error);
+            throw error;
+        }
+    }
+
+    async getMasterDocumentsByPhone(phone: string): Promise<any[]> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/master/documents/${phone}`,
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data.data;
+        } catch (error) {
+            console.error('Error fetching master documents:', error);
+            throw error;
+        }
+    }
+
+    
+    public async approveRegistration(id: string): Promise<void> {
+        try {
+            await axios.post(
+                `${this.laravelApiUrl}/employee-registrations/${id}/approve`,
+                {},
+                {
+                    headers: this.getHeaders()
+                }
+            );
+        } catch (error) {
+            console.error('Error approving registration:', error);
+            throw error;
+        }
+    }
+
+
+    
+    public async rejectRegistration(id: string): Promise<void> {
+        try {
+            await axios.post(
+                `${this.laravelApiUrl}/employee-registrations/${id}/reject`,
+                {},
+                {
+                    headers: this.getHeaders()
+                }
+            );
+        } catch (error) {
+            console.error('Error rejecting registration:', error);
+            throw error;
+        }
+    }
+
     public async logout(telegramId: number): Promise<void> {
         try {
             // Очищаем токен в Redis через бэкенд
@@ -647,6 +1392,23 @@ class LaravelService {
             // Не пробрасываем ошибку дальше, просто логируем
         }
     }
+
+    public async getBranchYclientsId(branchId: string): Promise<any> {
+        try {
+            const response = await axios.get(
+                `${this.laravelApiUrl}/branches/${branchId}/yclients-id`,
+                {
+                    headers: this.getHeaders()
+                }
+            );
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching branch yclients_id:', error);
+            throw error;
+        }
+    }
+
+    
 
     public async updateMasterDescription(
         phone: string,
@@ -780,14 +1542,15 @@ async authAdmin(phone: string, password: string, telegram_id: number): Promise<A
     }
 }
 
-// В LaravelService добавляем новый метод:
-public async uploadSignedDocuments(registrationId: number, files: Array<{url: string, name: string}>): Promise<any> {
+
+
+async uploadSignedDocuments(registrationId: number, files: Array<{url: string, name: string}>): Promise<any> {
     try {
         const response = await axios.post(
             `${this.laravelApiUrl}/employee-registrations/${registrationId}/upload-signed-documents`,
             { 
                 files,
-                status: 'documents_uploaded' // Обновляем статус регистрации
+                status: 'documents_uploaded'
             },
             {
                 headers: {
@@ -796,9 +1559,14 @@ public async uploadSignedDocuments(registrationId: number, files: Array<{url: st
                 }
             }
         );
+
         return response.data;
     } catch (error) {
-        console.error('Error uploading signed documents:', error);
+        console.error('Error uploading signed documents:', {
+            error,
+            registrationId,
+            response: error.response?.data
+        });
         throw error;
     }
 }
@@ -982,26 +1750,84 @@ public async checkTimeSlotAvailability(
     }
 }
 
-async updateMasterPhoto(telegramId: number, photoPath: string): Promise<any> {
+async updateMasterPhoto(
+    phone: string,
+    photoPath: string
+): Promise<any> {
     try {
+        console.log('Starting master photo update:', {
+            phone,
+            photoPath
+        });
+
+        // Проверяем существование файла
+        if (!fs.existsSync(photoPath)) {
+            throw new Error('Photo file not found');
+        }
+
+        // Создаем FormData и добавляем файл и телефон
         const form = new FormData();
         form.append('photo', fs.createReadStream(photoPath));
-        form.append('telegram_id', telegramId.toString());
+        form.append('phone', phone);
 
         const response = await axios.post(
             `${this.laravelApiUrl}/masters/update-photo`,
             form,
             {
                 headers: {
-                    ...form.getHeaders()
-                }
+                    ...form.getHeaders(),
+                },
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
             }
         );
 
-        return response.data;
-    } catch (error) {
-        console.error('Error updating master photo:', error);
-        throw error;
+        console.log('Full update photo response:', {
+            status: response.status,
+            data: response.data
+        });
+
+        if (response.data) {
+            return response.data; // Возвращаем полный объект ответа
+        }
+
+        throw new Error('Invalid response format');
+
+    } catch (error: any) {
+        // Расширенное логирование ошибки
+        console.error('Error updating master photo:', {
+            errorMessage: error?.message,
+            errorResponse: {
+                status: error?.response?.status,
+                statusText: error?.response?.statusText,
+                data: error?.response?.data
+            },
+            requestData: {
+                phone,
+                photoPath,
+                url: `${this.laravelApiUrl}/masters/update-photo`
+            }
+        });
+
+        // Формируем объект ответа с ошибкой
+        const errorResponse = {
+            success: false,
+            message: 'Не удалось обновить фото',
+            error: error?.message
+        };
+
+        // Добавляем специфические ошибки
+        if (error?.response?.status === 401) {
+            errorResponse.message = 'Ошибка авторизации';
+        } else if (error?.response?.status === 404) {
+            errorResponse.message = 'Мастер не найден в системе';
+        } else if (error?.response?.status === 413) {
+            errorResponse.message = 'Файл слишком большой';
+        } else if (error?.response?.data?.message) {
+            errorResponse.message = error.response.data.message;
+        }
+
+        return errorResponse; // Возвращаем объект с информацией об ошибке
     }
 }
 
@@ -1244,6 +2070,30 @@ public async getMasterServices({
         console.error('Error in getMasterServices:', error);
         throw new Error('Не удалось получить список услуг: ' + 
             (error?.response?.data?.message || error.message));
+    }
+}
+
+public async getCompanies(): Promise<any> {
+    try {
+        const response = await axios.get<any>(
+            `${this.laravelApiUrl}/companies`
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error getting companies:', error);
+        return null;
+    }
+}
+
+public async getProducts(companyId: number): Promise<any> {
+    try {
+        const response = await axios.get(
+            `${this.laravelApiUrl}/products/${companyId}`
+        );
+        return response.data;
+    } catch (error) {
+        console.error('Error getting products:', error);
+        return null;
     }
 }
 

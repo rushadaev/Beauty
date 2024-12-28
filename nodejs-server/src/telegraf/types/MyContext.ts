@@ -10,6 +10,91 @@ export interface NotificationSettings {
     push: boolean;
 }
 
+export interface Notification {
+    id: number;
+    telegram_id: number;
+    name: string;
+    sum: string | null;
+    notification_datetime: string;
+    type: 'single' | 'recurring';
+    frequency?: 'daily' | 'weekly' | 'monthly' | 'custom';
+    frequency_value?: number;
+    is_active: boolean;
+    last_notification_sent_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+interface Task {
+    id: number;
+    title: string;
+    description: string | null;
+    status: 'pending' | 'in_progress' | 'completed';
+    type: 'schedule_update' | 'photo_update' | 'description_update' | 'other';
+    master_phone: string | null;
+    master_name: string | null;
+    completed_at: string | null;
+    deadline: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+// Интерфейс для ответа с одной задачей
+export interface TaskResponse {
+    success: boolean;
+    data: Task;
+    message?: string;
+}
+
+declare module 'telegraf/typings/scenes/base' {
+    interface SceneSessionData {
+        tasksState: {
+            page: number;
+            filter: 'active' | 'completed' | 'all';
+        };
+    }
+}
+
+// Интерфейс для пагинированного ответа со списком задач
+export interface TaskPaginatedResponse {
+    success: boolean; // Добавляем поле success
+    data: {
+        current_page: number;
+        data: Task[];
+        total: number;
+        per_page: number;
+    };
+    meta: {
+        total: number;
+    };
+}
+
+// Состояние для сцены задач
+export interface TasksState {
+    page: number;
+    filter: 'active' | 'completed' | 'all';
+}
+
+export interface SceneState {
+    tasksState: TasksState;
+}
+
+export interface TasksSceneState {
+    tasksState: {
+        page: number;
+        filter: 'active' | 'completed' | 'all';
+    };
+}
+
+export type TasksSceneContext = MyContext & {
+    scene: Scenes.SceneContextScene<MyContext> & {
+        state: SceneState;
+    };
+};
+
+
+
+
 
 
 export interface StaffMember {
@@ -107,6 +192,18 @@ export interface ScheduleResponse {
     };
 }
 
+export interface UpdateNotificationResponse {
+    success: boolean;
+    data?: any;
+    message?: string;
+}
+
+export interface NotificationResponse {
+    success: boolean;
+    message?: string;
+    data?: any;
+}
+
 
 /**
  * Search Requests Session Interface extending the Base Wizard Session
@@ -130,24 +227,42 @@ export interface ReauthState {
     cabinet: any;
 }
 
+export interface PaginatedNotifications {
+    data: AdminNotification[];
+    meta: {
+        current_page: number;
+        total: number;
+        per_page: number;
+    };
+}
+
 export interface NotificationForm {
     notification_id?: number;
     product_id?: number;
     product_name?: string;
-
-
-
-
     id?: string;
     name: string;
     sum?: string;
     dateTime: string;
     type?: string;
+    frequency?: 'daily' | 'weekly' | 'monthly' | 'custom' | ''; // добавляем пустую строку как возможное значение
+    frequency_value?: string;
+    created_at?: string;
 }
+
+export interface CreateNotificationResponse {
+    success: boolean;
+    message?: string;
+    data?: any;
+}
+
 /**
  * Base Wizard Session Interface
  */
 export interface MyWizardSession extends Scenes.WizardSessionData {
+    tasksState: TasksState;
+    __scenes: any;
+    warehouseForm: any;
     selectedRecordId: any;
     password: string;
     phone: string;
@@ -178,6 +293,8 @@ export interface MyWizardSession extends Scenes.WizardSessionData {
     documentUpload?: DocumentUploadSession;
     registrationId?: number;
     scheduleState: ScheduleState; // Добавляем поле для состояния расписания
+    selectedBranchId?: string;
+    selectedProductId?: string;
 }
 
 
@@ -216,6 +333,9 @@ export type MySessionData = MyWizardSession;
  * Global Session Interface accommodating all Scene Sessions
  */
 export interface MySession extends Scenes.WizardSession<MySessionData> {
+    tasksState: TasksState;
+    selectedNotificationId: number; // Меняем тип с string на number
+    editField?: 'name' | 'sum' | 'date';
     user: {
         token?: string;
         data?: any;
@@ -265,6 +385,24 @@ export interface MySession extends Scenes.WizardSession<MySessionData> {
     changePhoneState?: ChangePhoneState;
     deleteServiceState?: DeleteServiceState;
     addServiceState?: AddServiceState;
+    selectedBranchId?: string;
+    selectedProductId?: string;
+    warehouseForm?: WarehouseForm;
+}
+
+export interface AdminNotification {
+    id: number;
+    name: string;
+    sum: string | null;
+    notification_datetime: string;
+    type: 'single' | 'recurring';
+    is_active: boolean;
+}
+
+export interface WarehouseForm {
+    productId: string;
+    minAmount: number | null;
+    type: 'warehouse';
 }
 
 export interface ChangePhoneState {
@@ -309,6 +447,12 @@ export interface registrationForm {
     hasEducationCert?: boolean;
     educationCertPhoto?: string;
     isSelfEmployed?: boolean;
+    selectedBranch?: {
+        id: string;
+        name: string;
+        address: string;
+    };
+    branch_yclients_id?: number;
 }
 
 
@@ -316,6 +460,7 @@ export interface registrationForm {
  * Custom Context Interface
  */
 export interface MyContext<U extends Update = Update> extends Context<U> {
+    ctx: {};
     myContextProp: string;
     session: MySession;
     scene: Scenes.SceneContextScene<MyContext, MySessionData>;

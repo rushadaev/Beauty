@@ -193,6 +193,16 @@ return [
             'timeout' => 70,
             'nice' => 0,
         ],
+        // Добавляем новый супервизор для fraud-detection
+        'fraud-supervisor' => [
+            'connection' => 'redis',
+            'queue' => ['fraud-detection'],
+            'balance' => 'simple',
+            'processes' => 2,
+            'tries' => 3,
+            'timeout' => 300,
+            'memory' => 128,
+        ],
     ],
 
     'environments' => [
@@ -202,11 +212,19 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'fraud-supervisor' => [
+                'maxProcesses' => 2,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'fraud-supervisor' => [
+                'maxProcesses' => 2,
             ],
         ],
     ],

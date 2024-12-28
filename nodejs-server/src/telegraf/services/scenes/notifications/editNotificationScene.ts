@@ -98,8 +98,8 @@ export const editNotificationScene = new Scenes.WizardScene<MyContext>(
 );
 
 editNotificationScene.command('start', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });
 editNotificationScene.action('mainmenu', async (ctx) => {
-    await ctx.scene.enter('main');
+    await ctx.scene.enter('admin_main');
 });

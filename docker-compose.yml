@@ -119,6 +119,7 @@ services:
       - ./nodejs-server:/usr/src/app:delegated
       - /usr/src/app/node_modules
       - ./wb-back/storage/state:/var/www/wb-back/storage/state:delegated
+      - ./wb-back/storage/app/employee_registrations:/var/www/wb-back/storage/app/employee_registrations:ro
     networks:
       - app-network
     environment:

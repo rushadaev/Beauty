@@ -2,8 +2,8 @@ import { Scenes, Markup } from 'telegraf';
 import { MyContext } from '../../../types/MyContext';
 
 import {enterHandler, userBlockHandler} from "./staffActions";
-import {taskBlockHandler} from "../tasks/tasksActions";
-import {tasksScene} from "../tasks/tasksScene";
+
+
 
 export const staffScene = new Scenes.BaseScene<MyContext>('staff');
 

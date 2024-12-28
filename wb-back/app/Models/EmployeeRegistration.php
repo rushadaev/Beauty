@@ -31,15 +31,21 @@ class EmployeeRegistration extends Model
         'med_book_expiry',
         'has_education_cert',
         'education_cert_photo',
+        'education_cert_path',
         'is_self_employed',
         'master_price',  // Добавляем это поле
+        'work_address', // Существующее поле
+        'branch_name',  // Новое поле
+        'branch_id',    // Новое поле
         'status',
         'contract_signed_at',
         'contract_expires_at',
         'work_address',
         'contract_number',
         'short_name',
-        'documents_uploaded_at'
+        'documents_uploaded_at',
+        'telegram_id',
+        'yclients_staff_id'
     ];
 
     protected $casts = [

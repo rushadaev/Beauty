@@ -139,9 +139,9 @@ adminMainScene.action('salary', async (ctx: MyContext) => {
     await ctx.scene.enter('salary');
 });
 
-adminMainScene.action('notifications', async (ctx: MyContext) => {
-    await ctx.answerCbQuery('🔔 Уведомления...');
-    await cabinetGate(ctx, 'notifications');
+adminMainScene.action('notifications', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('notifications_management');
 });
 
 adminMainScene.action('employment', async (ctx: MyContext) => {
@@ -149,9 +149,9 @@ adminMainScene.action('employment', async (ctx: MyContext) => {
     await ctx.scene.enter('employment');
 });
 
-adminMainScene.action('warehouse', async (ctx: MyContext) => {
+adminMainScene.action('warehouse', async (ctx) => {
     await ctx.answerCbQuery('🏪 Управление складом...');
-    await ctx.scene.enter('warehouse');
+    return ctx.scene.enter('warehouse'); // Теперь переходим в основное меню склада
 });
 
 adminMainScene.action('staff', async (ctx: MyContext) => {

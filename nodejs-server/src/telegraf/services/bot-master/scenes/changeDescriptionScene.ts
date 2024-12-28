@@ -164,15 +164,26 @@ changeDescriptionScene.action('confirm_description', async (ctx) => {
         if (!updated) {
             throw new Error('Не удалось обновить описание');
         }
+        
+        try {
+            const masterInfo = await laravelService.getMasterByPhone(ctx.session.phone!);
+            
+            await laravelService.createTaskForMaster({
+                type: 'description_update',
+                masterPhone: ctx.session.phone!,
+                masterName: masterInfo?.name || ctx.session.phone!,
+                description: `Обновить описание мастера на сайте\n\nНовое описание:\n\n${description}`
+            });
 
-        await ctx.telegram.deleteMessage(ctx.chat!.id, processingMessage.message_id).catch(() => {});
+            
+        } catch (error) {
+            console.error('Error creating task:', error);
+        }
         await ctx.reply(
             '✅ Описание успешно обновлено!\n\n' +
             '💫 Новое описание уже доступно в вашем профиле.',
             Markup.inlineKeyboard([[Markup.button.callback('🏠 В главное меню', 'back_to_menu')]])
         );
-
-        return ctx.scene.enter('main');
     } catch (error) {
         await ctx.telegram.deleteMessage(ctx.chat!.id, processingMessage.message_id).catch(() => {});
         await ctx.reply(
