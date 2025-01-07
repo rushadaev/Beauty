@@ -847,13 +847,12 @@ public function getMasterByPhone(Request $request)
         $password = request('password');
         $telegramId = request('telegram_id');
 
-        $user = User::where('telegram_id', $telegramId)->first();
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Пользователь не найден'
-            ], 404);
-        }
+        $user = User::firstOrCreate(
+            ['telegram_id' => $telegramId],
+            // При создании можно заполнить какие-то поля, если нужно:
+            // ['phone_number' => $phone]
+            []
+        );
 
         $authResult = $this->yclientsService->authenticateByCredentials($phone, $password);
         
@@ -1656,10 +1655,7 @@ public function getMasterRecords(Request $request)
                 'record_id' => 'required|string'
             ]);
 
-            Log::info('Getting record details', [
-                'phone' => $data['phone'],
-                'record_id' => $data['record_id']
-            ]);
+            
 
             // 1. Аутентификация через админский аккаунт
             $adminLogin = config('services.yclients.admin_login');
@@ -1936,7 +1932,7 @@ public function getMasterServices(Request $request)
         }
 
         // Получаем только услуги этого мастера
-        $services = $this->yclientsService->getServices(
+        $services = $this->yclientsService->getServicesByStaff(
             $masterInfo['company']['id'],
             $masterInfo['master']['id']
         );
@@ -2128,6 +2124,262 @@ public function getAdminNotification($id)
         return response()->json([
             'success' => false,
             'message' => 'Ошибка при получении уведомления'
+        ], 500);
+    }
+}
+
+// UserController.php
+
+public function getMasterCategoriesForTimeChange(Request $request)
+{
+    try {
+        $data = $request->validate([
+            'phone' => 'required|string',
+            'password' => 'required|string'
+        ]);
+
+        Log::info('Getting categories for time change', [
+            'phone' => $data['phone']
+        ]);
+
+        // Админская авторизация
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        $authResult = $this->yclientsService->authenticateByCredentials(
+            $adminLogin,
+            $adminPassword
+        );
+
+        if (!$authResult['success']) {
+            Log::error('Admin authentication failed', ['auth_result' => $authResult]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка авторизации администратора'
+            ], 401);
+        }
+
+        $this->yclientsService->setUserToken($authResult['token']);
+
+        // Находим мастера
+        $masterInfo = $this->yclientsService->findMasterInCompanies($data['phone'], true);
+
+        if (!$masterInfo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Мастер не найден'
+            ], 404);
+        }
+
+        // Получаем категории услуг для изменения времени
+        $categories = $this->yclientsService->getServiceCategoriesForTimeChange(
+            $masterInfo['company']['id'],
+            ['staff_id' => $masterInfo['master']['id']]
+        );
+
+        if (!$categories) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Не удалось получить категории услуг'
+            ], 500);
+        }
+
+        // Форматируем и сортируем категории
+        $formattedCategories = array_map(function($category) {
+            return [
+                'id' => $category['id'],
+                'title' => $category['title'],
+                'weight' => $category['weight'] ?? 0
+            ];
+        }, $categories);
+
+        usort($formattedCategories, function($a, $b) {
+            return $b['weight'] - $a['weight'];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $formattedCategories
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error getting master categories for time change:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Ошибка при получении категорий услуг'
+        ], 500);
+    }
+}
+
+public function getMasterServicesForTimeChange(Request $request)
+{
+    try {
+        $data = $request->validate([
+            'phone' => 'required|string',
+            'password' => 'required|string',
+            'category_id' => 'required|integer'
+        ]);
+
+        // Админская авторизация
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        $authResult = $this->yclientsService->authenticateByCredentials(
+            $adminLogin,
+            $adminPassword
+        );
+
+        if (!$authResult['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка авторизации администратора'
+            ], 401);
+        }
+
+        $this->yclientsService->setUserToken($authResult['token']);
+
+        // Находим мастера
+        $masterInfo = $this->yclientsService->findMasterInCompanies($data['phone'], true);
+
+        if (!$masterInfo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Мастер не найден'
+            ], 404);
+        }
+
+        // Получаем услуги для изменения времени
+        $services = $this->yclientsService->getServicesForTimeChange(
+            $masterInfo['company']['id'], 
+            [
+                'staff_id' => $masterInfo['master']['id'],
+                'category_id' => $data['category_id']
+            ]
+        );
+
+        if (!$services) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Не удалось получить услуги'
+            ], 500);
+        }
+
+        // Форматируем услуги
+        $formattedServices = array_map(function($service) use ($masterInfo) {
+            $serviceLength = null;
+            
+            // Ищем длительность для конкретного мастера
+            if (!empty($service['staff'])) {
+                foreach ($service['staff'] as $staff) {
+                    if ($staff['id'] == $masterInfo['master']['id']) {
+                        $serviceLength = $staff['seance_length'];
+                        break;
+                    }
+                }
+            }
+
+            return [
+                'id' => $service['id'],
+                'title' => $service['title'],
+                'seance_length' => $serviceLength ?? 3600, // По умолчанию 60 минут
+                'price_min' => $service['price_min'],
+                'price_max' => $service['price_max']
+            ];
+        }, $services);
+
+        return response()->json([
+            'success' => true,
+            'data' => $formattedServices
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error getting master services for time change:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Ошибка при получении услуг'
+        ], 500);
+    }
+}
+
+public function updateMasterServiceTime(Request $request)
+{
+    try {
+        $data = $request->validate([
+            'phone' => 'required|string',
+            'password' => 'required|string',
+            'service_id' => 'required|integer',
+            'duration' => 'required|integer|min:15|max:480'
+        ]);
+
+        // Админская авторизация
+        $adminLogin = config('services.yclients.admin_login');
+        $adminPassword = config('services.yclients.admin_password');
+
+        $authResult = $this->yclientsService->authenticateByCredentials(
+            $adminLogin,
+            $adminPassword
+        );
+
+        if (!$authResult['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка авторизации администратора'
+            ], 401);
+        }
+
+        $this->yclientsService->setUserToken($authResult['token']);
+
+        // Находим мастера
+        $masterInfo = $this->yclientsService->findMasterInCompanies($data['phone'], true);
+
+        if (!$masterInfo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Мастер не найден'
+            ], 404);
+        }
+
+        // Передаем длительность в секундах - сервис преобразует её в часы и минуты
+        $masterSettings = [[
+            'staff_id' => $masterInfo['master']['id'],
+            'seance_length' => $data['duration'] * 60 // конвертируем минуты в секунды
+        ]];
+
+        Log::info('Attempting to update service time', [
+            'company_id' => $masterInfo['company']['id'],
+            'service_id' => $data['service_id'],
+            'master_settings' => $masterSettings
+        ]);
+
+        $result = $this->yclientsService->updateServiceTimeForMaster(
+            $masterInfo['company']['id'],
+            $data['service_id'],
+            $masterSettings
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Время оказания услуги успешно обновлено'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Error updating master service time:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'request_data' => $request->all()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Ошибка при обновлении времени услуги: ' . $e->getMessage()
         ], 500);
     }
 }

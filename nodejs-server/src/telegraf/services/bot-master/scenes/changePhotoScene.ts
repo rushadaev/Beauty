@@ -64,7 +64,7 @@ changePhotoScene.on('photo', async (ctx) => {
             file_id: photo.file_id
         });
 
-        // Проверка размеров фото
+        /* Проверка размеров фото
         if (photo.width < MIN_SIZE || photo.height < MIN_SIZE) {
             await ctx.reply(
                 `⚠️ Фото слишком маленькое. Минимальный размер ${MIN_SIZE}x${MIN_SIZE} пикселей.`,
@@ -74,9 +74,9 @@ changePhotoScene.on('photo', async (ctx) => {
                 ])
             );
             return;
-        }
+        }**/
 
-        // Проверка квадратного формата
+        /* Проверка квадратного формата
         if (Math.abs(photo.width - photo.height) > 10) {
             await ctx.reply(
                 '⚠️ Фото должно быть квадратным (соотношение сторон 1:1).',
@@ -86,7 +86,7 @@ changePhotoScene.on('photo', async (ctx) => {
                 ])
             );
             return;
-        }
+        }**/
 
         const processingMessage = await ctx.reply('⌛ Обрабатываем фотографию...');
 

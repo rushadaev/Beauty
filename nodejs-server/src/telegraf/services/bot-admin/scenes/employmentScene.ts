@@ -93,7 +93,6 @@ ${application.has_med_book ? `Срок действия до: ${formattedDate}` 
                 Markup.button.callback('✅ Принять', `approve_${applicationId}`),
                 Markup.button.callback('❌ Отказать', `reject_${applicationId}`)
             ],
-            [Markup.button.callback('📄 Проверить документы', `check_docs_${applicationId}`)],
             [Markup.button.callback('« К списку заявок', 'show_applications')]
         ]);
 

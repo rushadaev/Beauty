@@ -561,7 +561,15 @@ handleMedBook.action('med_book_yes', async (ctx) => {
 });
 handleMedBook.action('med_book_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasMedBook = false;
-    return handleEducationCertQuestion(ctx);
+    // Сначала пропускаем шаг с датой медкнижки
+    ctx.wizard.selectStep(ctx.wizard.cursor + 2);
+    await ctx.reply('У вас есть сертификат об образовании?', Markup.inlineKeyboard([
+        [
+            Markup.button.callback('Да', 'education_cert_yes'),
+            Markup.button.callback('Нет', 'education_cert_no')
+        ]
+    ]));
+    return;
 });
 
 // Handle med book expiry

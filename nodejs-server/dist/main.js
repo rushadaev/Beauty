@@ -1473,17 +1473,26 @@ class LaravelService {
             throw error;
         }
     }
-    static async exportSalaryReport() {
+    async exportSalaryReport(startDate, endDate) {
+        var _a;
         try {
-            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default()({
-                url: `${process.env.LARAVEL_API_URL}/salary/export`,
-                method: 'GET',
-                responseType: 'arraybuffer'
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().get(`${this.laravelApiUrl}/salary/export`, {
+                params: {
+                    start_date: startDate,
+                    end_date: endDate
+                },
+                responseType: 'arraybuffer',
+                headers: this.getHeaders(),
+                timeout: 300000 // увеличиваем до 5 минут
             });
             return response.data;
         }
         catch (error) {
-            console.error('Error exporting salary:', error);
+            if (axios__WEBPACK_IMPORTED_MODULE_0___default().isAxiosError(error)) {
+                if (((_a = error.response) === null || _a === void 0 ? void 0 : _a.status) === 504) {
+                    throw new Error('Превышено время формирования отчёта. Попробуйте еще раз.');
+                }
+            }
             throw error;
         }
     }
@@ -2066,6 +2075,76 @@ class LaravelService {
                 (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
         }
     }
+    async getMasterCategoriesForTimeChange({ phone, password }) {
+        var _a, _b, _c, _d;
+        try {
+            console.log('Starting getMasterCategoriesForTimeChange');
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/master/categories-time-change`, {
+                phone,
+                password
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось получить категории услуг');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in getMasterCategoriesForTimeChange:', error);
+            throw new Error('Не удалось получить категории услуг: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async getMasterServicesForTimeChange({ phone, password, category_id }) {
+        var _a, _b, _c, _d;
+        try {
+            console.log('Starting getMasterServicesForTimeChange');
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/master/services-time-change`, {
+                phone,
+                password,
+                category_id
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось получить список услуг');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in getMasterServicesForTimeChange:', error);
+            throw new Error('Не удалось получить список услуг: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async updateMasterServiceTime({ phone, password, service_id, duration }) {
+        var _a, _b, _c, _d;
+        try {
+            console.log('Starting updateMasterServiceTime');
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/master/update-service-time`, {
+                phone,
+                password,
+                service_id,
+                duration
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось обновить длительность услуги');
+            }
+            return {
+                success: true,
+                message: response.data.message,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error in updateMasterServiceTime:', error);
+            throw new Error('Не удалось обновить длительность услуги: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
     async getMasterServices({ phone, password }) {
         var _a, _b, _c, _d;
         try {
@@ -2106,6 +2185,145 @@ class LaravelService {
         catch (error) {
             console.error('Error getting products:', error);
             return null;
+        }
+    }
+    async getServiceCategories(params) {
+        var _a, _b, _c, _d;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/services/categories`, {
+                phone: params.phone,
+                password: params.password,
+                company_id: params.companyId
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось получить категории услуг');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error getting service categories:', error);
+            throw new Error('Не удалось получить категории услуг: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async getServices(params) {
+        var _a, _b, _c, _d;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/services/list`, {
+                phone: params.phone,
+                password: params.password,
+                company_id: params.companyId,
+                category_id: params.categoryId
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось получить список услуг');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error getting services:', error);
+            throw new Error('Не удалось получить список услуг: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async generateServicesTemplate(params) {
+        var _a, _b, _c;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/services/template`, {
+                phone: params.phone,
+                password: params.password
+            }, {
+                responseType: 'arraybuffer'
+            });
+            if ((_a = response.headers['content-type']) === null || _a === void 0 ? void 0 : _a.includes('application/json')) {
+                // Если получили JSON вместо файла - значит произошла ошибка
+                const errorText = new TextDecoder().decode(response.data);
+                const error = JSON.parse(errorText);
+                throw new Error(error.message || 'Не удалось сгенерировать шаблон');
+            }
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error generating services template:', error);
+            throw new Error('Не удалось сгенерировать шаблон: ' +
+                (((_c = (_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.message) || error.message));
+        }
+    }
+    async generatePinboxTemplate(params) {
+        var _a, _b, _c;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/pinbox/template`, {
+                phone: params.phone,
+                password: params.password
+            }, {
+                responseType: 'arraybuffer'
+            });
+            if ((_a = response.headers['content-type']) === null || _a === void 0 ? void 0 : _a.includes('application/json')) {
+                const errorText = new TextDecoder().decode(response.data);
+                const error = JSON.parse(errorText);
+                throw new Error(error.message || 'Не удалось сгенерировать шаблон Pinbox');
+            }
+            return response.data;
+        }
+        catch (error) {
+            console.error('Error generating pinbox template:', error);
+            throw new Error('Не удалось сгенерировать шаблон Pinbox: ' +
+                (((_c = (_b = error === null || error === void 0 ? void 0 : error.response) === null || _b === void 0 ? void 0 : _b.data) === null || _c === void 0 ? void 0 : _c.message) || error.message));
+        }
+    }
+    async processServicesUpdates(params) {
+        var _a, _b, _c, _d;
+        try {
+            const formData = new (form_data__WEBPACK_IMPORTED_MODULE_2___default())();
+            formData.append('file', params.file, {
+                filename: 'services_update.xlsx',
+                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            formData.append('phone', params.phone);
+            formData.append('password', params.password);
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/services/process-updates`, formData, {
+                headers: Object.assign({}, formData.getHeaders())
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось обработать изменения');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error processing services updates:', error);
+            throw new Error('Не удалось обработать изменения: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
+        }
+    }
+    async updateServicePrices(params) {
+        var _a, _b, _c, _d;
+        try {
+            const response = await axios__WEBPACK_IMPORTED_MODULE_0___default().post(`${this.laravelApiUrl}/admin/services/update-prices`, {
+                phone: params.phone,
+                password: params.password,
+                updates: params.updates
+            });
+            if (!((_a = response.data) === null || _a === void 0 ? void 0 : _a.success)) {
+                throw new Error(((_b = response.data) === null || _b === void 0 ? void 0 : _b.message) || 'Не удалось обновить цены');
+            }
+            return {
+                success: true,
+                data: response.data.data
+            };
+        }
+        catch (error) {
+            console.error('Error updating service prices:', error);
+            throw new Error('Не удалось обновить цены: ' +
+                (((_d = (_c = error === null || error === void 0 ? void 0 : error.response) === null || _c === void 0 ? void 0 : _c.data) === null || _d === void 0 ? void 0 : _d.message) || error.message));
         }
     }
 }
@@ -2383,6 +2601,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _services_bot_master_scenes_change_phone_scene__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../services/bot-master/scenes/change_phone_scene */ "./src/telegraf/services/bot-master/scenes/change_phone_scene.ts");
 /* harmony import */ var _services_bot_master_scenes_delete_service_scene__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../services/bot-master/scenes/delete_service_scene */ "./src/telegraf/services/bot-master/scenes/delete_service_scene.ts");
 /* harmony import */ var _services_bot_master_scenes_add_service_scene__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../services/bot-master/scenes/add_service_scene */ "./src/telegraf/services/bot-master/scenes/add_service_scene.ts");
+/* harmony import */ var _services_bot_master_scenes_change_service_time_scene__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../services/bot-master/scenes/change_service_time_scene */ "./src/telegraf/services/bot-master/scenes/change_service_time_scene.ts");
 
  // Ensure correct path
 
@@ -2393,6 +2612,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 // If you have other scenes like subscriptionScene, consider importing them similarly
+
 
 
 
@@ -2418,6 +2638,7 @@ const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
     _services_bot_master_scenes_change_phone_scene__WEBPACK_IMPORTED_MODULE_12__.changePhoneScene,
     _services_bot_master_scenes_delete_service_scene__WEBPACK_IMPORTED_MODULE_13__.deleteServiceScene,
     _services_bot_master_scenes_add_service_scene__WEBPACK_IMPORTED_MODULE_14__.addServiceScene,
+    _services_bot_master_scenes_change_service_time_scene__WEBPACK_IMPORTED_MODULE_15__.changeServiceTimeScene,
 ]);
 // Middleware to log incoming updates
 botMaster.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
@@ -2429,9 +2650,6 @@ botMaster.use(async (ctx, next) => {
 // Handle /start command
 botMaster.start(async (ctx) => {
     // Очищаем сессию при старте
-    if (ctx.session) {
-        ctx.session = {}; // Сбрасываем сессию
-    }
     const startPayload = ctx.payload;
     if (startPayload && startPayload === 'registration') {
         // Если есть payload registration, идем сразу на регистрацию
@@ -2501,6 +2719,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _services_bot_admin_scenes_remindLaterScene__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../services/bot-admin/scenes/remindLaterScene */ "./src/telegraf/services/bot-admin/scenes/remindLaterScene.ts");
 /* harmony import */ var _services_bot_admin_scenes_notificationsListScene__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ../services/bot-admin/scenes/notificationsListScene */ "./src/telegraf/services/bot-admin/scenes/notificationsListScene.ts");
 /* harmony import */ var _services_bot_admin_scenes_tasksScene__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ../services/bot-admin/scenes/tasksScene */ "./src/telegraf/services/bot-admin/scenes/tasksScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_changeServicesScene__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! ../services/bot-admin/scenes/changeServicesScene */ "./src/telegraf/services/bot-admin/scenes/changeServicesScene.ts");
+/* harmony import */ var _services_bot_admin_scenes_pinboxScene__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(/*! ../services/bot-admin/scenes/pinboxScene */ "./src/telegraf/services/bot-admin/scenes/pinboxScene.ts");
 
 
 
@@ -2515,6 +2735,8 @@ __webpack_require__.r(__webpack_exports__);
 
 
 // Импорты сцен склад
+
+
 
 
 
@@ -2551,6 +2773,8 @@ const stage = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.Stage([
     _services_bot_admin_scenes_remindLaterScene__WEBPACK_IMPORTED_MODULE_18__.remindLaterScene,
     _services_bot_admin_scenes_notificationsListScene__WEBPACK_IMPORTED_MODULE_19__.notificationsListScene,
     _services_bot_admin_scenes_tasksScene__WEBPACK_IMPORTED_MODULE_20__.tasksScene,
+    _services_bot_admin_scenes_changeServicesScene__WEBPACK_IMPORTED_MODULE_21__.changeServicesScene,
+    _services_bot_admin_scenes_pinboxScene__WEBPACK_IMPORTED_MODULE_22__.pinboxScene,
 ]);
 // Middleware
 bot.use((0,telegraf__WEBPACK_IMPORTED_MODULE_0__.session)({ store }));
@@ -2895,7 +3119,7 @@ adminMainScene.enter(async (ctx) => {
 ℹ️ Выберите нужный раздел:`;
     const mainMenuKeyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
         [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👥 Управление персоналом', 'staff'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✂️ Изменение услуг', 'change_services'),
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📋 Задачи', 'tasks'),
         ],
         [
@@ -2907,6 +3131,7 @@ adminMainScene.enter(async (ctx) => {
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👥 Трудоустройство', 'employment'),
         ],
         [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📦 Pinbox', 'pinbox'),
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
@@ -2922,6 +3147,10 @@ adminMainScene.enter(async (ctx) => {
         _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in adminMainScene.enter:', error);
         await ctx.reply('Произошла ошибка при загрузке главного меню. Попробуйте еще раз.');
     }
+});
+adminMainScene.action('pinbox', async (ctx) => {
+    await ctx.answerCbQuery('📦 Переход в Pinbox...');
+    await ctx.scene.enter('pinbox');
 });
 // Обработчик выхода
 adminMainScene.action('logout', async (ctx) => {
@@ -2997,9 +3226,9 @@ adminMainScene.action('warehouse', async (ctx) => {
     await ctx.answerCbQuery('🏪 Управление складом...');
     return ctx.scene.enter('warehouse'); // Теперь переходим в основное меню склада
 });
-adminMainScene.action('staff', async (ctx) => {
-    await ctx.answerCbQuery('👥 Управление персоналом...');
-    await ctx.scene.enter('staff');
+adminMainScene.action('change_services', async (ctx) => {
+    await ctx.answerCbQuery('✂️ Изменение услуг...');
+    await ctx.scene.enter('change_services');
 });
 // Обработчик возврата в главное меню
 adminMainScene.action('mainmenu', async (ctx) => {
@@ -3018,6 +3247,243 @@ adminMainScene.use(async (ctx, next) => {
         ]));
     }
 });
+
+
+/***/ }),
+
+/***/ "./src/telegraf/services/bot-admin/scenes/changeServicesScene.ts":
+/*!***********************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/changeServicesScene.ts ***!
+  \***********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   changeServicesScene: () => (/* binding */ changeServicesScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+
+
+
+const changeServicesScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('change_services');
+// Входная точка сцены
+changeServicesScene.enter(async (ctx) => {
+    var _a, _b;
+    // Проверяем авторизацию
+    const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+    const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+    if (!phone || !password) {
+        await ctx.reply('Ошибка: не найдены данные авторизации. Попробуйте перелогиниться.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+            ]]));
+        return;
+    }
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📥 Получить шаблон Excel', 'get_template')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📤 Загрузить заполненный Excel', 'upload_template')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+    ]);
+    await ctx.reply('🏷 Управление услугами\n\n' +
+        '1. Нажмите «Получить шаблон Excel» — вы получите таблицу со списком филиалов и услуг.\n' +
+        '2. Откройте скачанный файл, найдите нужную услугу(и) и в колонке «Новая цена» укажите желаемую стоимость.\n' +
+        '3. Сохраните файл.\n' +
+        '4. Нажмите «Загрузить заполненный Excel», а затем отправьте файл сюда в чат.\n' +
+        '\nПосле загрузки бот покажет, какие услуги будут изменены, и предложит подтвердить или отменить изменения.', keyboard);
+});
+changeServicesScene.action('upload_template', async (ctx) => {
+    await ctx.answerCbQuery(); // закрыть «часики» на кнопке
+    await ctx.reply('Пожалуйста, отправьте файл Excel (XLSX) в чат сообщением.\n' +
+        'Убедитесь, что загружаете файл в формате .xlsx.');
+});
+// Обработка получения шаблона
+changeServicesScene.action('get_template', async (ctx) => {
+    var _a, _b;
+    try {
+        // 1. Сразу отвечаем на нажатие кнопки, чтобы убрать «часики» у инлайн-кнопки
+        await ctx.answerCbQuery();
+        // 2. Отправляем «пожалуйста, подождите»
+        const waitingMessage = await ctx.reply('⏳ Пожалуйста, подождите, идёт генерация Excel...');
+        // 3. Проверяем авторизацию
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (!phone || !password) {
+            // Если нет авторизации – удаляем «ждём-сообщение» и выходим
+            await ctx.deleteMessage(waitingMessage.message_id);
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        // 4. Генерируем файл через сервис
+        const template = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].generateServicesTemplate({ phone, password });
+        // 5. Удаляем «ждём-сообщение»
+        await ctx.deleteMessage(waitingMessage.message_id);
+        // 6. Отправляем файл
+        await ctx.replyWithDocument({
+            source: template,
+            filename: 'services_template.xlsx'
+        });
+        // 7. Дополнительное сообщение
+        await ctx.reply('📝 Заполните колонку "Новая цена" для тех услуг, которые нужно изменить.\n' +
+            'После заполнения загрузите файл обратно в бот.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад', 'back_to_menu')]]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error generating template:', error);
+        // Если произошло исключение — желательно удалить «ждём-сообщение» (если оно существует)
+        // Но нужно убедиться, что мы его не удаляли раньше
+        // Здесь для простоты можем обернуть в try/catch
+        try {
+            // Если не успели создать waitingMessage, этот вызов может упасть
+            // но это не критично
+            await ctx.deleteMessage();
+        }
+        catch (e) {
+            // Игнорируем ошибку удаления
+        }
+        await ctx.reply('Произошла ошибка при генерации шаблона. Попробуйте позже.');
+    }
+});
+// Обработка загрузки файла
+changeServicesScene.on('document', async (ctx) => {
+    var _a, _b, _c;
+    try {
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (!phone || !password) {
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        if (!((_c = ctx.message.document.mime_type) === null || _c === void 0 ? void 0 : _c.includes('spreadsheet'))) {
+            await ctx.reply('Пожалуйста, загрузите файл Excel (.xlsx)');
+            return;
+        }
+        const file = await ctx.telegram.getFile(ctx.message.document.file_id);
+        const filePath = file.file_path;
+        if (!filePath) {
+            await ctx.reply('Не удалось получить файл');
+            return;
+        }
+        const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN_SUPPLIES_NEW}/${filePath}`;
+        const response = await fetch(fileUrl);
+        const buffer = await response.arrayBuffer();
+        // Обрабатываем файл через API
+        // В обработке файла:
+        const result = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].processServicesUpdates({
+            phone,
+            password,
+            file: Buffer.from(buffer)
+        });
+        if (!result.success) {
+            await ctx.reply('Ошибка при обработке файла: ' + result.message);
+            return;
+        }
+        // Формируем сообщение для подтверждения
+        let message = '📋 Подтвердите изменения:\n\n';
+        if (result.data.changes) {
+            // Группируем изменения по филиалам с явным указанием типов
+            const groupedChanges = result.data.changes.reduce((acc, change) => {
+                if (!acc[change.branch_name]) {
+                    acc[change.branch_name] = [];
+                }
+                acc[change.branch_name].push(change);
+                return acc;
+            }, {});
+            // Преобразуем сгруппированные изменения в сообщение
+            Object.keys(groupedChanges).forEach(branch => {
+                message += `🏢 ${branch}:\n`;
+                groupedChanges[branch].forEach(change => {
+                    message += `- ${change.service_name}: ${change.old_price}₽ → ${change.new_price}₽\n`;
+                });
+                message += '\n';
+            });
+        }
+        if (result.data.errors.length > 0) {
+            message += '\n⚠️ Предупреждения:\n';
+            for (const error of result.data.errors) {
+                message += `- Строка ${error.row}: ${error.message}\n`;
+            }
+        }
+        ctx.session.pendingChanges = result.data.changes;
+        await ctx.reply(message, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Подтвердить', 'confirm_changes')],
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отменить', 'cancel_changes')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error processing uploaded file:', error);
+        await ctx.reply('Произошла ошибка при обработке файла. Проверьте формат и попробуйте снова.');
+    }
+});
+// Подтверждение изменений
+changeServicesScene.action('confirm_changes', async (ctx) => {
+    var _a, _b;
+    try {
+        await ctx.answerCbQuery('Применяем изменения...');
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        const changes = ctx.session.pendingChanges;
+        if (!phone || !password) {
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        if (!changes || changes.length === 0) {
+            await ctx.editMessageText('Нет изменений для применения');
+            return;
+        }
+        // Применяем изменения через API
+        const updates = changes.map(change => ({
+            branch_id: change.branch_id,
+            service_id: change.service_id,
+            new_price: change.new_price
+        }));
+        // Применяем изменения через API
+        const results = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateServicePrices({
+            phone,
+            password,
+            updates
+        });
+        // Формируем отчет
+        let message = '📊 Результаты обновления:\n\n';
+        message += `✅ Успешно: ${results.data.success}\n`;
+        if (results.data.failed > 0) {
+            message += `❌ Ошибок: ${results.data.failed}\n\n`;
+            message += 'Детали ошибок:\n';
+            results.data.errors.forEach((error) => {
+                message += `- ${error.branch_name}, ${error.service_name}: ${error.error}\n`;
+            });
+        }
+        await ctx.editMessageText(message, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]
+        ]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error applying changes:', error);
+        await ctx.reply('Произошла ошибка при применении изменений. Попробуйте позже.');
+    }
+});
+// Навигация
+changeServicesScene.action('back_to_menu', async (ctx) => {
+    await ctx.scene.reenter();
+});
+changeServicesScene.action('mainmenu', async (ctx) => {
+    await ctx.scene.enter('admin_main');
+});
+changeServicesScene.action('cancel_changes', async (ctx) => {
+    try {
+        await ctx.answerCbQuery();
+        ctx.session.pendingChanges = undefined;
+        await ctx.editMessageText('❌ Изменения отменены', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')
+            ]]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error cancelling changes:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (changeServicesScene);
 
 
 /***/ }),
@@ -3295,7 +3761,6 @@ ${application.has_med_book ? `Срок действия до: ${formattedDate}` 
                 telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✅ Принять', `approve_${applicationId}`),
                 telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❌ Отказать', `reject_${applicationId}`)
             ],
-            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📄 Проверить документы', `check_docs_${applicationId}`)],
             [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« К списку заявок', 'show_applications')]
         ]);
         await ctx.editMessageText(messageText, keyboard);
@@ -3967,6 +4432,194 @@ notificationsManagementScene.action('mainmenu', async (ctx) => {
 
 /***/ }),
 
+/***/ "./src/telegraf/services/bot-admin/scenes/pinboxScene.ts":
+/*!***************************************************************!*\
+  !*** ./src/telegraf/services/bot-admin/scenes/pinboxScene.ts ***!
+  \***************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__),
+/* harmony export */   pinboxScene: () => (/* binding */ pinboxScene)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+/* harmony import */ var _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../utils/logger/loggerTelegram */ "./src/utils/logger/loggerTelegram.ts");
+
+
+
+const pinboxScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('pinbox');
+// Константы для категорий
+const CATEGORIES = {
+    WOMAN: 'Женский шугаринг',
+    MAN: 'Мужской шугаринг',
+    ADDITIONAL: 'Дополнительные услуги'
+};
+const BRANCH_IDS = {
+    YCLIENTS: 490462, // ID в Yclients (Спортивная)
+    PINBOX: '63744,63745,63746' // ID в Pinbox (все филиалы)
+};
+const CATEGORY_MAPPING = {
+    'Классический шугаринг Cherry Town  женский': CATEGORIES.WOMAN,
+    'Чёрный шунгитовый шугаринг Monochrome женский': CATEGORIES.WOMAN,
+    'Лечебный spa-шугаринг Botanix  женский': CATEGORIES.WOMAN,
+    'Полимерный воск  italwax женский': CATEGORIES.WOMAN,
+    'Классический шугаринг Cherry Town мужской': CATEGORIES.MAN,
+    'Чёрный шунгитовый шугаринг Monochrome мужской': CATEGORIES.MAN,
+    'Лечебный spa-шугаринг Botanix  мужской': CATEGORIES.MAN,
+    'Комбинированная депиляция  сахар +воск мужской': CATEGORIES.MAN,
+    'Полимерный воск  italwax мужской': CATEGORIES.MAN,
+    'Карамельная липосакция Renie': CATEGORIES.ADDITIONAL
+};
+// Входная точка сцены
+pinboxScene.enter(async (ctx) => {
+    var _a, _b;
+    const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+    const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+    if (!phone || !password) {
+        await ctx.reply('Ошибка: не найдены данные авторизации. Попробуйте перелогиниться.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+            ]]));
+        return;
+    }
+    const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📥 Выгрузить таблицу Pinbox', 'export_pinbox')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')]
+    ]);
+    await ctx.reply('📦 Модуль Pinbox\n\n' +
+        '• Выгрузка данных производится из эталонного филиала "Спортивная"\n' +
+        '• Услуги автоматически группируются по категориям\n' +
+        '• Форматирование производится согласно требованиям Pinbox\n\n' +
+        'Нажмите кнопку ниже для выгрузки таблицы.', keyboard);
+});
+// Экспорт таблицы
+pinboxScene.action('export_pinbox', async (ctx) => {
+    var _a, _b;
+    try {
+        await ctx.answerCbQuery();
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        // 1. Показываем «Пожалуйста, подождите»
+        const waitingMessage = await ctx.reply('⏳ Формируем таблицу Pinbox, пожалуйста, подождите...');
+        if (!phone || !password) {
+            await ctx.deleteMessage(waitingMessage.message_id);
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        // 2. Генерируем файл
+        const template = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].generatePinboxTemplate({ phone, password });
+        // 3. Удаляем сообщение «ждём...»
+        await ctx.deleteMessage(waitingMessage.message_id);
+        // 4. Отправляем результат
+        await ctx.replyWithDocument({
+            source: template,
+            filename: 'pinbox_services.xlsx'
+        });
+        await ctx.reply('✅ Таблица успешно сформирована!\n' +
+            'Теперь вы можете загрузить её в сервис Pinbox.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]]));
+    }
+    catch (error) {
+        _utils_logger_loggerTelegram__WEBPACK_IMPORTED_MODULE_2__["default"].error('Error in pinbox export:', error);
+        try {
+            await ctx.deleteMessage(); // на случай, если waitingMessage существует
+        }
+        catch (e) {
+            // ничего страшного
+        }
+        await ctx.reply('❌ Произошла ошибка при формировании таблицы. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в меню', 'back_to_menu')]]));
+    }
+});
+function formatServiceTitle(serviceTitle, categoryTitle) {
+    // Очищаем входные данные от лишних пробелов
+    serviceTitle = serviceTitle.trim();
+    categoryTitle = categoryTitle.trim();
+    // Объявляем переменную title
+    let title = serviceTitle;
+    // Базовое форматирование категории
+    let categoryInfo = categoryTitle
+        .replace(/Cherry\s*Town/gi, '')
+        .replace(/женский$/, 'шугаринг женский')
+        .replace(/мужской$/, 'шугаринг мужской')
+        .trim();
+    // Специальные случаи форматирования
+    if (categoryTitle.toLowerCase().includes('italwax')) {
+        const gender = categoryTitle.includes('женский') ? 'женский' : 'мужской';
+        if (!serviceTitle.toLowerCase().includes('italwax')) {
+            title = `${serviceTitle} Italwax | Полимерный воск italwax шугаринг ${gender}`;
+        }
+        else {
+            title = `${serviceTitle} | Полимерный воск italwax шугаринг ${gender}`;
+        }
+    }
+    else if (serviceTitle.includes('Botanix-SPA') || categoryTitle.includes('Botanix')) {
+        const gender = categoryTitle.includes('женский') ? 'женский' : 'мужской';
+        if (serviceTitle.includes('Botanix-SPA')) {
+            title = `${serviceTitle} | Лечебный spa-шугаринг ${gender}`;
+        }
+        else {
+            title = `${serviceTitle} Botanix-SPA | Лечебный spa-шугаринг ${gender}`;
+        }
+    }
+    else if (categoryTitle.includes('Monochrome')) {
+        const gender = categoryTitle.includes('женский') ? 'женский' : 'мужской';
+        if (!serviceTitle.toLowerCase().includes('monochrome')) {
+            title = `${serviceTitle} Monochrome | Чёрный шунгитовый шугаринг ${gender}`;
+        }
+        else {
+            title = `${serviceTitle} | Чёрный шунгитовый шугаринг ${gender}`;
+        }
+    }
+    else if (categoryTitle.includes('Карамельная липосакция')) {
+        title = `${serviceTitle} | Карамельная липосакция Renie`;
+    }
+    else {
+        // Стандартное форматирование для остальных случаев
+        title = `${serviceTitle} | ${categoryInfo}`;
+    }
+    // Убираем лишние пробелы и дубликаты разделителей
+    title = title
+        .replace(/\s+/g, ' ') // Убираем множественные пробелы
+        .replace(/\|\s+\|/g, '|') // Убираем дубли разделителей
+        .trim();
+    return title;
+}
+// Обновляем функцию форматирования для Pinbox
+function formatServicesForPinbox(services) {
+    const result = [];
+    for (const service of services) {
+        if (!CATEGORY_MAPPING[service.category_title])
+            continue;
+        const pinboxCategory = CATEGORY_MAPPING[service.category_title];
+        const formattedTitle = formatServiceTitle(service.title, service.category_title);
+        result.push({
+            'Наименование товара': formattedTitle,
+            'Тип цены': service.price_min ? 'фикс' : 'от',
+            'Цена товара': service.price_min,
+            'Валюта': 0, // рубли
+            'Категория': pinboxCategory,
+            'Описание': formattedTitle,
+            'Номера филиалов': BRANCH_IDS.PINBOX,
+            'URL фото': 'https://pinbox.ru/assets/images/cabinet/dfprice.img.png'
+        });
+    }
+    return result;
+}
+// Навигация
+pinboxScene.action('back_to_menu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.reenter();
+});
+pinboxScene.action('mainmenu', async (ctx) => {
+    await ctx.answerCbQuery();
+    await ctx.scene.enter('admin_main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (pinboxScene);
+
+
+/***/ }),
+
 /***/ "./src/telegraf/services/bot-admin/scenes/productsScene.ts":
 /*!*****************************************************************!*\
   !*** ./src/telegraf/services/bot-admin/scenes/productsScene.ts ***!
@@ -4222,25 +4875,90 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const salaryScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('salary');
-// Обработчик кнопки экспорта
+// Хранилище состояний пользователей
+const userStates = new Map();
+// Функция для конвертации даты из формата DD.MM.YYYY в YYYY-MM-DD
+function convertDateFormat(dateStr) {
+    const match = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!match)
+        return null;
+    return `${match[3]}-${match[2]}-${match[1]}`;
+}
+// Обработчик выбора периода
+salaryScene.action('select_period', async (ctx) => {
+    await ctx.reply('Введите дату начала периода в формате ДД.ММ.ГГГГ (например, 28.12.2024)');
+    ctx.scene.state = { awaitingStartDate: true };
+});
+// Обработчик ввода текста (дат)
+salaryScene.on('text', async (ctx) => {
+    var _a;
+    const userId = (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id;
+    if (!userId)
+        return;
+    const state = ctx.scene.state;
+    if (state.awaitingStartDate) {
+        const startDateInput = ctx.message.text;
+        const startDate = convertDateFormat(startDateInput);
+        if (!startDate) {
+            await ctx.reply('Неверный формат даты. Используйте формат ДД.ММ.ГГГГ (например, 28.12.2024)');
+            return;
+        }
+        userStates.set(userId, { startDate, endDate: '' });
+        ctx.scene.state = { awaitingEndDate: true };
+        await ctx.reply('Теперь введите дату конца периода в формате ДД.ММ.ГГГГ');
+        return;
+    }
+    if (state.awaitingEndDate) {
+        const endDateInput = ctx.message.text;
+        const endDate = convertDateFormat(endDateInput);
+        if (!endDate) {
+            await ctx.reply('Неверный формат даты. Используйте формат ДД.ММ.ГГГГ (например, 28.12.2024)');
+            return;
+        }
+        const dateRange = userStates.get(userId);
+        if (dateRange) {
+            dateRange.endDate = endDate;
+            userStates.set(userId, dateRange);
+            // Преобразуем даты обратно для отображения
+            const displayStartDate = dateRange.startDate.split('-').reverse().join('.');
+            const displayEndDate = dateRange.endDate.split('-').reverse().join('.');
+            const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📥 Сформировать отчет', 'export_salary')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Выбрать другой период', 'select_period')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('◀️ Назад', 'mainmenu')]
+            ]);
+            await ctx.reply(`Выбран период: ${displayStartDate} — ${displayEndDate}`, keyboard);
+        }
+        ctx.scene.state = {};
+    }
+});
+// Обработчик экспорта
 salaryScene.action('export_salary', async (ctx) => {
+    var _a;
     try {
+        const userId = (_a = ctx.from) === null || _a === void 0 ? void 0 : _a.id;
+        if (!userId)
+            return;
+        const dateRange = userStates.get(userId);
+        if (!dateRange) {
+            await ctx.reply('Пожалуйста, сначала выберите период');
+            return;
+        }
         await ctx.answerCbQuery('Генерируем отчет...');
-        // Получаем файл через сервис
-        const excelBuffer = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].exportSalaryReport();
-        // Создаем временный файл
+        const excelBuffer = await _services_laravelService__WEBPACK_IMPORTED_MODULE_3__["default"].exportSalaryReport(dateRange.startDate, dateRange.endDate);
         const tempDir = path__WEBPACK_IMPORTED_MODULE_2___default().join(__dirname, '../../../temp');
         if (!fs__WEBPACK_IMPORTED_MODULE_1___default().existsSync(tempDir)) {
             fs__WEBPACK_IMPORTED_MODULE_1___default().mkdirSync(tempDir, { recursive: true });
         }
+        // Преобразуем даты для имени файла
+        const fileStartDate = dateRange.startDate.split('-').reverse().join('.');
+        const fileEndDate = dateRange.endDate.split('-').reverse().join('.');
         const tempFilePath = path__WEBPACK_IMPORTED_MODULE_2___default().join(tempDir, `salary_${Date.now()}.xlsx`);
         fs__WEBPACK_IMPORTED_MODULE_1___default().writeFileSync(tempFilePath, excelBuffer);
-        // Отправляем файл
         await ctx.replyWithDocument({
             source: tempFilePath,
-            filename: `salary_report.xlsx`
+            filename: `Зарплаты_${fileStartDate}-${fileEndDate}.xlsx`
         });
-        // Удаляем временный файл
         fs__WEBPACK_IMPORTED_MODULE_1___default().unlinkSync(tempFilePath);
     }
     catch (error) {
@@ -4248,6 +4966,7 @@ salaryScene.action('export_salary', async (ctx) => {
         await ctx.reply('Произошла ошибка при формировании отчета. Попробуйте позже.');
     }
 });
+// Возврат в главное меню
 salaryScene.action('mainmenu', async (ctx) => {
     await ctx.answerCbQuery();
     await ctx.scene.enter('admin_main');
@@ -4255,7 +4974,7 @@ salaryScene.action('mainmenu', async (ctx) => {
 // Входная точка сцены
 salaryScene.enter(async (ctx) => {
     const keyboard = telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📥 Скачать отчет по зарплате', 'export_salary')],
+        [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('📅 Выбрать период', 'select_period')],
         [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('◀️ Назад', 'mainmenu')]
     ]);
     await ctx.reply('💰 Управление зарплатами', keyboard);
@@ -4941,31 +5660,31 @@ addServiceScene.enter(async (ctx) => {
                     telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записям', 'back_to_records')
                 ]]));
         }
-        // Сохраняем состояние
+        // Сохраняем в сессии данные для дальнейших шагов
         ctx.session.addServiceState = {
             recordId: state.recordId,
             phone: state.phone || ctx.session.phone,
             password: state.password || ctx.session.password
         };
-        // Получаем список доступных услуг
-        const services = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServices({
+        // 1) Запрашиваем категории, доступные мастеру
+        const categoriesResponse = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterCategoriesForTimeChange({
             phone: ctx.session.addServiceState.phone,
             password: ctx.session.addServiceState.password
         });
-        if (!(services === null || services === void 0 ? void 0 : services.success) || !((_a = services.data) === null || _a === void 0 ? void 0 : _a.length)) {
-            return ctx.reply('❌ Нет доступных услуг для добавления', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+        if (!(categoriesResponse === null || categoriesResponse === void 0 ? void 0 : categoriesResponse.success) || !((_a = categoriesResponse.data) === null || _a === void 0 ? void 0 : _a.length)) {
+            return ctx.reply('❌ Нет доступных категорий для добавления услуг', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
                     telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
                 ]]));
         }
-        // Создаем кнопки только с названиями услуг
-        const buttons = services.data.map(service => ([
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(service.title, `add_service_${service.id}`)
+        // 2) Формируем кнопки для категорий
+        const buttons = categoriesResponse.data.map((cat) => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(cat.title, `select_category_${cat.id}`)
         ]));
-        // Добавляем кнопку отмены
+        // Кнопка отмены
         buttons.push([
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_service_add')
         ]);
-        await ctx.reply('Выберите услугу для добавления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+        await ctx.reply('Выберите категорию услуг:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
     }
     catch (error) {
         console.error('Error in addServiceScene enter:', error);
@@ -4973,6 +5692,56 @@ addServiceScene.enter(async (ctx) => {
                 telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад к записи', 'back_to_record')
             ]]));
     }
+});
+// Обработка выбора категории
+addServiceScene.action(/^select_category_(\d+)$/, async (ctx) => {
+    var _a;
+    try {
+        const categoryId = Number(ctx.match[1]);
+        const state = ctx.session.addServiceState;
+        if (!state || !state.phone || !state.password) {
+            throw new Error('Нет данных авторизации или записи');
+        }
+        await ctx.answerCbQuery(); // Закрыть "часики" на кнопке
+        // 1) Показываем "загрузка услуг"
+        const waitMsg = await ctx.reply('⏳ Загрузка услуг...');
+        // 2) Запрашиваем услуги мастера в конкретной категории
+        const servicesResponse = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServicesForTimeChange({
+            phone: state.phone,
+            password: state.password,
+            category_id: categoryId
+        });
+        // Удаляем сообщение "загрузка"
+        await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(() => { });
+        if (!(servicesResponse === null || servicesResponse === void 0 ? void 0 : servicesResponse.success) || !((_a = servicesResponse.data) === null || _a === void 0 ? void 0 : _a.length)) {
+            await ctx.reply('❌ Нет доступных услуг в этой категории', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Выбрать другую категорию', 'back_to_categories')],
+                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_service_add')]
+            ]));
+            return;
+        }
+        // 3) Формируем кнопки услуг
+        const buttons = servicesResponse.data.map((service) => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(service.title, `add_service_${service.id}`)
+        ]));
+        // Добавляем кнопки "назад к категориям" и "отмена"
+        buttons.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Выбрать другую категорию', 'back_to_categories'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Отмена', 'cancel_service_add')
+        ]);
+        await ctx.reply('Выберите услугу для добавления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    }
+    catch (error) {
+        console.error('Error in select_category:', error);
+        await ctx.reply('❌ Произошла ошибка при загрузке услуг. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+            [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Назад', 'cancel_service_add')]
+        ]));
+    }
+});
+// Кнопка вернуться к категориям (просто перезаходим в сцену)
+addServiceScene.action('back_to_categories', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter(); // Заново вызовется enter, покажет категории
 });
 // Обработка выбора услуги
 addServiceScene.action(/^add_service_(\d+)$/, async (ctx) => {
@@ -5452,22 +6221,28 @@ changePhotoScene.on('photo', async (ctx) => {
             height: photo.height,
             file_id: photo.file_id
         });
-        // Проверка размеров фото
+        /* Проверка размеров фото
         if (photo.width < MIN_SIZE || photo.height < MIN_SIZE) {
-            await ctx.reply(`⚠️ Фото слишком маленькое. Минимальный размер ${MIN_SIZE}x${MIN_SIZE} пикселей.`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('❓ Помощь с размером', 'size_help')]
-            ]));
+            await ctx.reply(
+                `⚠️ Фото слишком маленькое. Минимальный размер ${MIN_SIZE}x${MIN_SIZE} пикселей.`,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
+                    [Markup.button.callback('❓ Помощь с размером', 'size_help')]
+                ])
+            );
             return;
-        }
-        // Проверка квадратного формата
+        }**/
+        /* Проверка квадратного формата
         if (Math.abs(photo.width - photo.height) > 10) {
-            await ctx.reply('⚠️ Фото должно быть квадратным (соотношение сторон 1:1).', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
-                [telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('✂️ Как обрезать фото?', 'crop_help')]
-            ]));
+            await ctx.reply(
+                '⚠️ Фото должно быть квадратным (соотношение сторон 1:1).',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('🔄 Загрузить другое фото', 'retry_photo')],
+                    [Markup.button.callback('✂️ Как обрезать фото?', 'crop_help')]
+                ])
+            );
             return;
-        }
+        }**/
         const processingMessage = await ctx.reply('⌛ Обрабатываем фотографию...');
         // Получаем файл
         const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN_MASTER}/${file.file_path}`;
@@ -5835,6 +6610,312 @@ changePhoneScene.action('back_to_record', async (ctx) => {
 
 /***/ }),
 
+/***/ "./src/telegraf/services/bot-master/scenes/change_service_time_scene.ts":
+/*!******************************************************************************!*\
+  !*** ./src/telegraf/services/bot-master/scenes/change_service_time_scene.ts ***!
+  \******************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   changeServiceTimeScene: () => (/* binding */ changeServiceTimeScene),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! telegraf */ "telegraf");
+/* harmony import */ var telegraf__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(telegraf__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _services_laravelService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../../services/laravelService */ "./src/services/laravelService.ts");
+
+
+const changeServiceTimeScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('change_service_time_scene');
+// Начальное состояние - показ категорий услуг
+changeServiceTimeScene.enter(async (ctx) => {
+    var _a, _b;
+    try {
+        // Очищаем временные данные сессии
+        ctx.session.selectedCategoryId = undefined;
+        ctx.session.selectedServiceId = undefined;
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        if (!phone) {
+            await ctx.reply('Ошибка: не найден номер телефона. Попробуйте перелогиниться.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        // Получаем категории услуг мастера используя новый метод
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterCategoriesForTimeChange({
+            phone,
+            password: ((_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password) || ''
+        });
+        if (!response.success) {
+            await ctx.reply('Не удалось получить категории услуг.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        const categories = response.data;
+        if (categories.length === 0) {
+            await ctx.reply('У вас нет доступных категорий услуг.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        // Создаем клавиатуру с категориями
+        const keyboard = categories.map(category => ([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(category.title, `select_category:${category.id}`)
+        ]));
+        // Добавляем кнопку возврата
+        keyboard.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+        ]);
+        await ctx.reply('Выберите категорию услуг:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(keyboard));
+    }
+    catch (error) {
+        console.error('Error in changeServiceTimeScene enter:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+            ]]));
+    }
+});
+// Обработка выбора категории
+changeServiceTimeScene.action(/^select_category:(\d+)$/, async (ctx) => {
+    var _a, _b;
+    try {
+        const categoryId = ctx.match[1];
+        ctx.session.selectedCategoryId = categoryId;
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (!phone || !password) {
+            await ctx.reply('Ошибка: не найден номер телефона или пароль.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        // Используем новый метод для получения услуг
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServicesForTimeChange({
+            phone,
+            password,
+            category_id: parseInt(categoryId)
+        });
+        if (!response.success) {
+            await ctx.reply('Не удалось получить список услуг.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к категориям', 'back_to_categories'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        const services = response.data;
+        if (services.length === 0) {
+            await ctx.reply('В данной категории нет услуг.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к категориям', 'back_to_categories'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        // Создаем клавиатуру с услугами
+        const keyboard = [];
+        for (const service of services) {
+            const currentDuration = Math.floor(service.seance_length / 60);
+            keyboard.push([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${service.title} (${currentDuration} мин)`, `select_service:${service.id}`)
+            ]);
+        }
+        keyboard.push([
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к категориям', 'back_to_categories'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+        ]);
+        await ctx.editMessageText('Выберите услугу для изменения длительности:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(keyboard));
+    }
+    catch (error) {
+        console.error('Error in select_category handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+            ]]));
+    }
+});
+// Обработка выбора услуги
+changeServiceTimeScene.action(/^select_service:(\d+)$/, async (ctx) => {
+    var _a, _b;
+    try {
+        const serviceId = ctx.match[1];
+        ctx.session.selectedServiceId = serviceId;
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (!phone || !password) {
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        // Получаем детали услуги
+        const serviceDetails = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServicesForTimeChange({
+            phone,
+            password,
+            category_id: ctx.session.selectedCategoryId || 0
+        });
+        if (!serviceDetails.success) {
+            await ctx.reply('Не удалось получить информацию об услуге.');
+            return;
+        }
+        const service = serviceDetails.data.find(s => s.id.toString() === serviceId);
+        if (!service) {
+            await ctx.reply('Услуга не найдена.');
+            return;
+        }
+        const currentDuration = Math.floor(service.seance_length / 60);
+        const hours = Math.floor(currentDuration / 60);
+        const minutes = currentDuration % 60;
+        const currentTimeFormatted = `${hours}:${minutes.toString().padStart(2, '0')}`;
+        await ctx.editMessageText(`Выбрана услуга: ${service.title}\n` +
+            `Текущая длительность: ${currentTimeFormatted}\n\n` +
+            'Введите новую длительность услуги в формате Ч:ММ\n' +
+            'Например: 1:30 или 0:45', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+            ]]));
+        // Устанавливаем флаг ожидания ввода времени
+        ctx.session.awaitingServiceDuration = true;
+        ctx.session.selectedServiceId = serviceId;
+    }
+    catch (error) {
+        console.error('Error in select_service handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Добавляем обработчик текстовых сообщений
+changeServiceTimeScene.on('text', async (ctx) => {
+    if (!ctx.session.awaitingServiceDuration) {
+        return;
+    }
+    const timeInput = ctx.message.text;
+    const timeRegex = /^(\d+):([0-5]\d)$/;
+    const match = timeInput.match(timeRegex);
+    if (!match) {
+        await ctx.reply('Неверный формат времени. Пожалуйста, используйте формат Ч:ММ\n' +
+            'Например: 1:30 или 0:45', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+            ]]));
+        return;
+    }
+    const hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const totalMinutes = hours * 60 + minutes;
+    if (totalMinutes < 15 || totalMinutes > 480) {
+        await ctx.reply('Длительность услуги должна быть от 15 минут до 8 часов', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+            ]]));
+        return;
+    }
+    try {
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterServiceTime({
+            phone: ctx.session.phone,
+            password: ctx.session.password,
+            service_id: parseInt(ctx.session.selectedServiceId),
+            duration: totalMinutes
+        });
+        if (!response.success) {
+            await ctx.reply('Не удалось обновить длительность услуги.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        // Сбрасываем флаг ожидания ввода
+        ctx.session.awaitingServiceDuration = false;
+        await ctx.reply(`✅ Длительность услуги успешно обновлена на ${hours}:${minutes.toString().padStart(2, '0')}!`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+            ]]));
+    }
+    catch (error) {
+        console.error('Error updating service duration:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.');
+    }
+});
+// Обработка установки длительности
+changeServiceTimeScene.action(/^set_duration:(\d+):(\d+)$/, async (ctx) => {
+    var _a, _b;
+    try {
+        const serviceId = ctx.match[1];
+        const duration = parseInt(ctx.match[2]);
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (!phone || !password) {
+            await ctx.reply('Ошибка: не найдены данные авторизации.');
+            return;
+        }
+        // Используем новый метод для обновления времени
+        const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].updateMasterServiceTime({
+            phone,
+            password,
+            service_id: parseInt(serviceId),
+            duration
+        });
+        if (!response.success) {
+            await ctx.reply('Не удалось обновить длительность услуги.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+                ]]));
+            return;
+        }
+        await ctx.editMessageText(`✅ Длительность услуги успешно обновлена на ${duration} минут!`, telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к услугам', 'back_to_services'),
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+            ]]));
+    }
+    catch (error) {
+        console.error('Error in set_duration handler:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([[
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Вернуться в главное меню', 'mainmenu')
+            ]]));
+    }
+});
+// Обработчики навигации
+changeServiceTimeScene.action('back_to_categories', async (ctx) => {
+    await ctx.scene.enter('change_service_time_scene');
+});
+changeServiceTimeScene.action('back_to_services', async (ctx) => {
+    var _a, _b;
+    // Сохраняем ID категории во временную переменную
+    const categoryId = ctx.session.selectedCategoryId;
+    // Перезаходим в сцену
+    await ctx.scene.reenter();
+    // Если была выбрана категория, сразу показываем её услуги
+    if (categoryId) {
+        const phone = (_a = ctx.session) === null || _a === void 0 ? void 0 : _a.phone;
+        const password = (_b = ctx.session) === null || _b === void 0 ? void 0 : _b.password;
+        if (phone && password) {
+            // Получаем услуги напрямую
+            const response = await _services_laravelService__WEBPACK_IMPORTED_MODULE_1__["default"].getMasterServicesForTimeChange({
+                phone,
+                password,
+                category_id: parseInt(categoryId)
+            });
+            if (response.success && response.data.length > 0) {
+                // Создаем клавиатуру с услугами
+                const keyboard = [];
+                for (const service of response.data) {
+                    const currentDuration = Math.floor(service.seance_length / 60);
+                    keyboard.push([
+                        telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`${service.title} (${currentDuration} мин)`, `select_service:${service.id}`)
+                    ]);
+                }
+                keyboard.push([
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('👈 Назад к категориям', 'back_to_categories'),
+                    telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('В главное меню', 'mainmenu')
+                ]);
+                await ctx.editMessageText('Выберите услугу для изменения длительности:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(keyboard));
+            }
+        }
+    }
+});
+changeServiceTimeScene.action('mainmenu', async (ctx) => {
+    await ctx.scene.enter('main');
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (changeServiceTimeScene);
+
+
+/***/ }),
+
 /***/ "./src/telegraf/services/bot-master/scenes/clientsManagementScene.ts":
 /*!***************************************************************************!*\
   !*** ./src/telegraf/services/bot-master/scenes/clientsManagementScene.ts ***!
@@ -5852,6 +6933,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const clientsManagementScene = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Scenes.BaseScene('clients_management_scene');
+const DAYS_PER_PAGE = 7;
 // Вспомогательные функции для работы с датами
 const formatDate = (date, format = 'YYYY-MM-DD') => {
     const pad = (n) => n.toString().padStart(2, '0');
@@ -5906,27 +6988,10 @@ clientsManagementScene.enter(async (ctx) => {
                 acc[dateKey].push(record);
                 return acc;
             }, {});
-            // Создаем структурированные кнопки
-            const buttons = [];
-            Object.entries(recordsByDate).forEach(([date, records]) => {
-                // Добавляем заголовок даты
-                buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`📅 ${date}`, 'noop')]);
-                // Добавляем записи за этот день
-                records.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .forEach(record => {
-                    var _a, _b;
-                    const time = formatTime(record.date);
-                    const clientName = ((_a = record.client) === null || _a === void 0 ? void 0 : _a.name) || 'Клиент';
-                    const services = (_b = record.services) === null || _b === void 0 ? void 0 : _b.map(s => s.title).slice(0, 2).join(', ');
-                    const buttonText = `${time} | ${clientName}${services ? ` - ${services}` : ''}`;
-                    buttons.push([
-                        telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(buttonText.length > 60 ? buttonText.slice(0, 57) + '...' : buttonText, `record_${record.id}`)
-                    ]);
-                });
-            });
-            // Добавляем кнопку возврата в меню
-            buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')]);
-            await ctx.reply('Выберите запись для управления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+            // Сохраняем группированные записи в сессии
+            ctx.scene.session.recordsByDate = recordsByDate;
+            ctx.scene.session.currentPage = ctx.scene.session.currentPage || 1;
+            await showRecordsPage(ctx);
         }
         catch (error) {
             // Удаляем сообщение о загрузке
@@ -5948,6 +7013,76 @@ clientsManagementScene.enter(async (ctx) => {
                 telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')
             ]]));
     }
+});
+async function showRecordsPage(ctx) {
+    const recordsByDate = ctx.scene.session.recordsByDate;
+    const currentPage = ctx.scene.session.currentPage || 1;
+    if (!recordsByDate) {
+        return ctx.reply('Ошибка: данные не найдены');
+    }
+    const dates = Object.keys(recordsByDate).sort((a, b) => {
+        return new Date(a).getTime() - new Date(b).getTime();
+    });
+    const totalPages = Math.ceil(dates.length / DAYS_PER_PAGE);
+    const startIdx = (currentPage - 1) * DAYS_PER_PAGE;
+    const endIdx = startIdx + DAYS_PER_PAGE;
+    const currentDates = dates.slice(startIdx, endIdx);
+    const buttons = [];
+    currentDates.forEach(date => {
+        buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`📅 ${date}`, 'noop')]);
+        recordsByDate[date]
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .forEach(record => {
+            var _a, _b;
+            const time = formatTime(record.date);
+            const clientName = ((_a = record.client) === null || _a === void 0 ? void 0 : _a.name) || 'Клиент';
+            const services = (_b = record.services) === null || _b === void 0 ? void 0 : _b.map(s => s.title).slice(0, 2).join(', ');
+            const buttonText = `${time} | ${clientName}${services ? ` - ${services}` : ''}`;
+            buttons.push([
+                telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(buttonText.length > 60 ? buttonText.slice(0, 57) + '...' : buttonText, `record_${record.id}`)
+            ]);
+        });
+    });
+    // Добавляем кнопки навигации
+    const navButtons = [];
+    if (currentPage > 1) {
+        navButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('⬅️ Назад', 'prev_page'));
+    }
+    if (currentPage < totalPages) {
+        navButtons.push(telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Вперёд ➡️', 'next_page'));
+    }
+    if (navButtons.length > 0) {
+        buttons.push(navButtons);
+    }
+    // Добавляем информацию о странице и кнопку возврата в меню
+    buttons.push([
+        telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback(`📄 ${currentPage}/${totalPages}`, 'page_info')
+    ]);
+    buttons.push([telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('« Вернуться в меню', 'mainmenu')]);
+    await ctx.editMessageText('Выберите запись для управления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons)).catch(async () => {
+        await ctx.reply('Выберите запись для управления:', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard(buttons));
+    });
+}
+// Добавляем обработчики для кнопок пагинации
+clientsManagementScene.action('prev_page', async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.scene.session.currentPage && ctx.scene.session.currentPage > 1) {
+        ctx.scene.session.currentPage--;
+        await showRecordsPage(ctx);
+    }
+});
+clientsManagementScene.action('next_page', async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.scene.session.recordsByDate) {
+        const totalPages = Math.ceil(Object.keys(ctx.scene.session.recordsByDate).length / DAYS_PER_PAGE);
+        if (ctx.scene.session.currentPage && ctx.scene.session.currentPage < totalPages) {
+            ctx.scene.session.currentPage++;
+            await showRecordsPage(ctx);
+        }
+    }
+});
+clientsManagementScene.action('page_info', async (ctx) => {
+    await ctx.answerCbQuery('Текущая страница записей').catch(() => { });
 });
 // Заглушка для кнопок-заголовков дат
 clientsManagementScene.action('noop', async (ctx) => {
@@ -6526,7 +7661,10 @@ mainScene.enter(async (ctx) => {
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить график работы', 'change_schedule'),
         ],
         [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout') // Добавляем кнопку выхода
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить время услуги', 'change_service_time') // Добавляем новую кнопку
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
     if ((_a = ctx.callbackQuery) === null || _a === void 0 ? void 0 : _a.message) {
@@ -6619,10 +7757,17 @@ mainScene.action('mainmenu', async (ctx) => {
             telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить график работы', 'change_schedule'),
         ],
         [
-            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout') // Добавляем кнопку выхода
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('изменить время услуги', 'change_service_time') // Добавляем новую кнопку
+        ],
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
     await ctx.editMessageText(messageText, mainMenuKeyboard);
+});
+mainScene.action('change_service_time', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_service_time_scene');
 });
 // Остальные обработчики остаются без изменений
 mainScene.action('education', async (ctx) => {
@@ -7174,7 +8319,15 @@ handleMedBook.action('med_book_yes', async (ctx) => {
 });
 handleMedBook.action('med_book_no', async (ctx) => {
     ctx.scene.session.registrationForm.hasMedBook = false;
-    return handleEducationCertQuestion(ctx);
+    // Сначала пропускаем шаг с датой медкнижки
+    ctx.wizard.selectStep(ctx.wizard.cursor + 2);
+    await ctx.reply('У вас есть сертификат об образовании?', telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.inlineKeyboard([
+        [
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Да', 'education_cert_yes'),
+            telegraf__WEBPACK_IMPORTED_MODULE_0__.Markup.button.callback('Нет', 'education_cert_no')
+        ]
+    ]));
+    return;
 });
 // Handle med book expiry
 const handleMedBookExpiry = new telegraf__WEBPACK_IMPORTED_MODULE_0__.Composer();

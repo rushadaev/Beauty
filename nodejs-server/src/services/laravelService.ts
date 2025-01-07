@@ -1275,19 +1275,28 @@ public async deleteAdminNotification(id: number): Promise<boolean> {
         }
     }
 
-    public async exportSalaryReport(): Promise<Buffer> {
+    public async exportSalaryReport(startDate: string, endDate: string): Promise<Buffer> {
         try {
             const response = await axios.get(
                 `${this.laravelApiUrl}/salary/export`,
                 {
+                    params: {
+                        start_date: startDate,
+                        end_date: endDate
+                    },
                     responseType: 'arraybuffer',
-                    headers: this.getHeaders()
+                    headers: this.getHeaders(),
+                    timeout: 300000 // увеличиваем до 5 минут
                 }
             );
             
             return response.data;
         } catch (error) {
-            console.error('Error exporting salary:', error);
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 504) {
+                    throw new Error('Превышено время формирования отчёта. Попробуйте еще раз.');
+                }
+            }
             throw error;
         }
     }
@@ -2042,6 +2051,109 @@ public async updateMasterRecord({
     }
 }
 
+public async getMasterCategoriesForTimeChange({
+    phone,
+    password
+}: {
+    phone: string;
+    password: string;
+}): Promise<any> {
+    try {
+        console.log('Starting getMasterCategoriesForTimeChange');
+
+        const response = await axios.post(`${this.laravelApiUrl}/master/categories-time-change`, {
+            phone,
+            password
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось получить категории услуг');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in getMasterCategoriesForTimeChange:', error);
+        throw new Error('Не удалось получить категории услуг: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async getMasterServicesForTimeChange({
+    phone,
+    password,
+    category_id
+}: {
+    phone: string;
+    password: string;
+    category_id: number;
+}): Promise<any> {
+    try {
+        console.log('Starting getMasterServicesForTimeChange');
+
+        const response = await axios.post(`${this.laravelApiUrl}/master/services-time-change`, {
+            phone,
+            password,
+            category_id
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось получить список услуг');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in getMasterServicesForTimeChange:', error);
+        throw new Error('Не удалось получить список услуг: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async updateMasterServiceTime({
+    phone,
+    password,
+    service_id,
+    duration
+}: {
+    phone: string;
+    password: string;
+    service_id: number;
+    duration: number;
+}): Promise<any> {
+    try {
+        console.log('Starting updateMasterServiceTime');
+
+        const response = await axios.post(`${this.laravelApiUrl}/master/update-service-time`, {
+            phone,
+            password,
+            service_id,
+            duration
+        });
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось обновить длительность услуги');
+        }
+
+        return {
+            success: true,
+            message: response.data.message,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error in updateMasterServiceTime:', error);
+        throw new Error('Не удалось обновить длительность услуги: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
 public async getMasterServices({
     phone,
     password
@@ -2094,6 +2206,205 @@ public async getProducts(companyId: number): Promise<any> {
     } catch (error) {
         console.error('Error getting products:', error);
         return null;
+    }
+}
+
+public async getServiceCategories(params: {
+    phone: string,
+    password: string,
+    companyId: number
+}): Promise<any> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/services/categories`,
+            {
+                phone: params.phone,
+                password: params.password,
+                company_id: params.companyId
+            }
+        );
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось получить категории услуг');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+    } catch (error: any) {
+        console.error('Error getting service categories:', error);
+        throw new Error('Не удалось получить категории услуг: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async getServices(params: {
+    phone: string,
+    password: string,
+    companyId: number,
+    categoryId: number
+}): Promise<any> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/services/list`,
+            {
+                phone: params.phone,
+                password: params.password,
+                company_id: params.companyId,
+                category_id: params.categoryId
+            }
+        );
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось получить список услуг');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error getting services:', error);
+        throw new Error('Не удалось получить список услуг: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async generateServicesTemplate(params: {
+    phone: string,
+    password: string
+}): Promise<Buffer> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/services/template`,
+            {
+                phone: params.phone,
+                password: params.password
+            },
+            {
+                responseType: 'arraybuffer'
+            }
+        );
+        
+        if (response.headers['content-type']?.includes('application/json')) {
+            // Если получили JSON вместо файла - значит произошла ошибка
+            const errorText = new TextDecoder().decode(response.data);
+            const error = JSON.parse(errorText);
+            throw new Error(error.message || 'Не удалось сгенерировать шаблон');
+        }
+
+        return response.data;
+    } catch (error: any) {
+        console.error('Error generating services template:', error);
+        throw new Error('Не удалось сгенерировать шаблон: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async generatePinboxTemplate(params: {
+    phone: string,
+    password: string
+}): Promise<Buffer> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/pinbox/template`,
+            {
+                phone: params.phone,
+                password: params.password
+            },
+            {
+                responseType: 'arraybuffer'
+            }
+        );
+        
+        if (response.headers['content-type']?.includes('application/json')) {
+            const errorText = new TextDecoder().decode(response.data);
+            const error = JSON.parse(errorText);
+            throw new Error(error.message || 'Не удалось сгенерировать шаблон Pinbox');
+        }
+
+        return response.data;
+    } catch (error: any) {
+        console.error('Error generating pinbox template:', error);
+        throw new Error('Не удалось сгенерировать шаблон Pinbox: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async processServicesUpdates(params: {
+    phone: string,
+    password: string,
+    file: Buffer
+}): Promise<any> {
+    try {
+        const formData = new FormData();
+        formData.append('file', params.file, {
+            filename: 'services_update.xlsx',
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        formData.append('phone', params.phone);
+        formData.append('password', params.password);
+
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/services/process-updates`,
+            formData,
+            {
+                headers: {
+                    ...formData.getHeaders()
+                }
+            }
+        );
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось обработать изменения');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error processing services updates:', error);
+        throw new Error('Не удалось обработать изменения: ' + 
+            (error?.response?.data?.message || error.message));
+    }
+}
+
+public async updateServicePrices(params: {
+    phone: string,
+    password: string,
+    updates: Array<{
+        branch_id: number,
+        service_id: number,
+        new_price: number
+    }>
+}): Promise<any> {
+    try {
+        const response = await axios.post(
+            `${this.laravelApiUrl}/admin/services/update-prices`,
+            { 
+                phone: params.phone,
+                password: params.password,
+                updates: params.updates
+            }
+        );
+
+        if (!response.data?.success) {
+            throw new Error(response.data?.message || 'Не удалось обновить цены');
+        }
+
+        return {
+            success: true,
+            data: response.data.data
+        };
+
+    } catch (error: any) {
+        console.error('Error updating service prices:', error);
+        throw new Error('Не удалось обновить цены: ' + 
+            (error?.response?.data?.message || error.message));
     }
 }
 

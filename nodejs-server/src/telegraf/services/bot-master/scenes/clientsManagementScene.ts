@@ -19,6 +19,14 @@ interface RecordData {
     }>;
 }
 
+const DAYS_PER_PAGE = 7;
+
+// Добавим интерфейс для пагинации в сессию
+interface SessionData {
+    currentPage?: number;
+    recordsByDate?: Record<string, RecordData[]>;
+}
+
 // Вспомогательные функции для работы с датами
 const formatDate = (date: Date, format: string = 'YYYY-MM-DD'): string => {
     const pad = (n: number) => n.toString().padStart(2, '0');
@@ -86,41 +94,15 @@ clientsManagementScene.enter(async (ctx: MyContext) => {
                 }
                 acc[dateKey].push(record);
                 return acc;
-            }, {} as Record<string, any[]>);
+            }, {} as Record<string, RecordData[]>);
 
-            // Создаем структурированные кнопки
-            const buttons: any[] = [];
-            Object.entries(recordsByDate).forEach(([date, records]) => {
-                // Добавляем заголовок даты
-                buttons.push([Markup.button.callback(`📅 ${date}`, 'noop')]);
-                
-                // Добавляем записи за этот день
-                records.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .forEach(record => {
-                        const time = formatTime(record.date);
-                        const clientName = record.client?.name || 'Клиент';
-                        const services = record.services
-                            ?.map(s => s.title)
-                            .slice(0, 2)
-                            .join(', ');
-                        
-                        const buttonText = `${time} | ${clientName}${services ? ` - ${services}` : ''}`;
-                        buttons.push([
-                            Markup.button.callback(
-                                buttonText.length > 60 ? buttonText.slice(0, 57) + '...' : buttonText,
-                                `record_${record.id}`
-                            )
-                        ]);
-                    });
-            });
+            // Сохраняем группированные записи в сессии
+            ctx.scene.session.recordsByDate = recordsByDate;
+            ctx.scene.session.currentPage = ctx.scene.session.currentPage || 1;
 
-            // Добавляем кнопку возврата в меню
-            buttons.push([Markup.button.callback('« Вернуться в меню', 'mainmenu')]);
+            await showRecordsPage(ctx);
 
-            await ctx.reply(
-                'Выберите запись для управления:',
-                Markup.inlineKeyboard(buttons)
-            );
+            
 
         } catch (error: any) {
             // Удаляем сообщение о загрузке
@@ -152,6 +134,104 @@ clientsManagementScene.enter(async (ctx: MyContext) => {
             ]])
         );
     }
+});
+
+async function showRecordsPage(ctx: MyContext) {
+    const recordsByDate = ctx.scene.session.recordsByDate;
+    const currentPage = ctx.scene.session.currentPage || 1;
+    
+    if (!recordsByDate) {
+        return ctx.reply('Ошибка: данные не найдены');
+    }
+
+    const dates = Object.keys(recordsByDate).sort((a, b) => {
+        return new Date(a).getTime() - new Date(b).getTime();
+    });
+
+    const totalPages = Math.ceil(dates.length / DAYS_PER_PAGE);
+    const startIdx = (currentPage - 1) * DAYS_PER_PAGE;
+    const endIdx = startIdx + DAYS_PER_PAGE;
+    const currentDates = dates.slice(startIdx, endIdx);
+
+    const buttons: any[] = [];
+    
+    currentDates.forEach(date => {
+        buttons.push([Markup.button.callback(`📅 ${date}`, 'noop')]);
+        
+        recordsByDate[date]
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .forEach(record => {
+                const time = formatTime(record.date);
+                const clientName = record.client?.name || 'Клиент';
+                const services = record.services
+                    ?.map(s => s.title)
+                    .slice(0, 2)
+                    .join(', ');
+                
+                const buttonText = `${time} | ${clientName}${services ? ` - ${services}` : ''}`;
+                buttons.push([
+                    Markup.button.callback(
+                        buttonText.length > 60 ? buttonText.slice(0, 57) + '...' : buttonText,
+                        `record_${record.id}`
+                    )
+                ]);
+            });
+    });
+
+    // Добавляем кнопки навигации
+    const navButtons = [];
+    if (currentPage > 1) {
+        navButtons.push(Markup.button.callback('⬅️ Назад', 'prev_page'));
+    }
+    if (currentPage < totalPages) {
+        navButtons.push(Markup.button.callback('Вперёд ➡️', 'next_page'));
+    }
+    if (navButtons.length > 0) {
+        buttons.push(navButtons);
+    }
+
+    // Добавляем информацию о странице и кнопку возврата в меню
+    buttons.push([
+        Markup.button.callback(
+            `📄 ${currentPage}/${totalPages}`,
+            'page_info'
+        )
+    ]);
+    buttons.push([Markup.button.callback('« Вернуться в меню', 'mainmenu')]);
+
+    await ctx.editMessageText(
+        'Выберите запись для управления:',
+        Markup.inlineKeyboard(buttons)
+    ).catch(async () => {
+        await ctx.reply(
+            'Выберите запись для управления:',
+            Markup.inlineKeyboard(buttons)
+        );
+    });
+}
+
+// Добавляем обработчики для кнопок пагинации
+clientsManagementScene.action('prev_page', async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.scene.session.currentPage && ctx.scene.session.currentPage > 1) {
+        ctx.scene.session.currentPage--;
+        await showRecordsPage(ctx);
+    }
+});
+
+clientsManagementScene.action('next_page', async (ctx) => {
+    await ctx.answerCbQuery();
+    if (ctx.scene.session.recordsByDate) {
+        const totalPages = Math.ceil(Object.keys(ctx.scene.session.recordsByDate).length / DAYS_PER_PAGE);
+        if (ctx.scene.session.currentPage && ctx.scene.session.currentPage < totalPages) {
+            ctx.scene.session.currentPage++;
+            await showRecordsPage(ctx);
+        }
+    }
+});
+
+clientsManagementScene.action('page_info', async (ctx) => {
+    await ctx.answerCbQuery('Текущая страница записей').catch(() => {});
 });
 
 // Заглушка для кнопок-заголовков дат

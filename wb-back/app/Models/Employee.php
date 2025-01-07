@@ -17,8 +17,11 @@ class Employee extends Model
         'is_active',
         'avatar',
         'telegram_id',
+        'phone',          // Добавлено новое поле
         'has_med_book',
-        'med_book_expiry'
+        'med_book_expiry',
+        'account_number',  // Убедитесь, что это поле есть
+        'bank_name'        // Убедитесь, что это поле есть
     ];
 
     protected $casts = [

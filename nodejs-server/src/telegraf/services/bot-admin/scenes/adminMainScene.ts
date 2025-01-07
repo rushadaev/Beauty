@@ -29,7 +29,7 @@ adminMainScene.enter(async (ctx: MyContext) => {
 
     const mainMenuKeyboard = Markup.inlineKeyboard([
         [
-            Markup.button.callback('👥 Управление персоналом', 'staff'),
+            Markup.button.callback('✂️ Изменение услуг', 'change_services'),
             Markup.button.callback('📋 Задачи', 'tasks'),
         ],
         [
@@ -41,6 +41,7 @@ adminMainScene.enter(async (ctx: MyContext) => {
             Markup.button.callback('👥 Трудоустройство', 'employment'),
         ],
         [
+            Markup.button.callback('📦 Pinbox', 'pinbox'),
             Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
@@ -61,6 +62,11 @@ adminMainScene.enter(async (ctx: MyContext) => {
         logger.error('Error in adminMainScene.enter:', error);
         await ctx.reply('Произошла ошибка при загрузке главного меню. Попробуйте еще раз.');
     }
+});
+
+adminMainScene.action('pinbox', async (ctx: MyContext) => {
+    await ctx.answerCbQuery('📦 Переход в Pinbox...');
+    await ctx.scene.enter('pinbox');
 });
 
 // Обработчик выхода
@@ -154,9 +160,9 @@ adminMainScene.action('warehouse', async (ctx) => {
     return ctx.scene.enter('warehouse'); // Теперь переходим в основное меню склада
 });
 
-adminMainScene.action('staff', async (ctx: MyContext) => {
-    await ctx.answerCbQuery('👥 Управление персоналом...');
-    await ctx.scene.enter('staff');
+adminMainScene.action('change_services', async (ctx: MyContext) => {
+    await ctx.answerCbQuery('✂️ Изменение услуг...');
+    await ctx.scene.enter('change_services');
 });
 
 // Обработчик возврата в главное меню

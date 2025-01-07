@@ -6,8 +6,10 @@ use App\Http\Controllers\YclientsController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SalaryExportController;
+use App\Http\Controllers\AdminServicesController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PinboxController;
 use App\Http\Controllers\Api\V1\EmployeeRegistrationController;
 use App\Http\Controllers\Api\V1\ContractGeneratorController;
 
@@ -147,3 +149,22 @@ Route::get('/master/documents/{phone}', [EmployeeRegistrationController::class, 
 Route::get('/salary/master', [UserController::class, 'getMasterSalary']);
 
 Route::get('/salary/export', [SalaryExportController::class, 'exportPayroll']);
+
+// routes/api.php
+// routes/api.php
+Route::prefix('master')->group(function () {
+    Route::post('/categories-time-change', [UserController::class, 'getMasterCategoriesForTimeChange']);
+    Route::post('/services-time-change', [UserController::class, 'getMasterServicesForTimeChange']);
+    Route::post('/update-service-time', [UserController::class, 'updateMasterServiceTime']);
+});
+
+// Роуты для управления услугами
+Route::prefix('admin/services')->group(function () {
+    Route::post('/categories', [AdminServicesController::class, 'getCategories']);
+    Route::post('/list', [AdminServicesController::class, 'getServices']);
+    Route::post('/template', [AdminServicesController::class, 'generateTemplate']);
+    Route::post('/process-updates', [AdminServicesController::class, 'processUpdates']);
+    Route::post('/update-prices', [AdminServicesController::class, 'updatePrices']);
+});
+
+Route::post('/admin/pinbox/template', [PinboxController::class, 'generateTemplate']);

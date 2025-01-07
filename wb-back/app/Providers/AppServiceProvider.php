@@ -7,7 +7,7 @@ use Illuminate\Support\ServiceProvider;
 use App\Models\APIKey;
 use App\Policies\APIKeyPolicy;
 use App\Services\SalaryExportService;
-use App\Services\YClientsService;
+use App\Services\YclientsService; // правильное имя
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -18,6 +18,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(SalaryExportService::class, function ($app) {
             return new SalaryExportService($app->make(YClientsService::class));
+        });
+
+        $this->app->singleton(YclientsService::class, function ($app) {
+            return new YclientsService(config('services.yclients.partner_token'));
         });
     }
 

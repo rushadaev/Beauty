@@ -625,6 +625,8 @@ public function findMasterInCompanies(string $phone, bool $useAdminAuth = false)
     }
 }
 
+
+
 private function normalizePhone(string $phone): string 
 {
     // Удаляем все, кроме цифр
@@ -1853,10 +1855,7 @@ public function sendUserInvite(int $companyId, string $phone, string $email): bo
 public function getRecords(int $companyId, array $params = []): ?array
 {
     try {
-        Log::info('Getting records from YClients', [
-            'company_id' => $companyId,
-            'params' => $params
-        ]);
+        
 
         $queryParams = array_merge([
             'page' => 1,
@@ -1920,10 +1919,7 @@ public function getRecords(int $companyId, array $params = []): ?array
 public function getRecord(int $companyId, string $recordId): ?array
 {
     try {
-        Log::info('Getting record details from YClients', [
-            'company_id' => $companyId,
-            'record_id' => $recordId
-        ]);
+       
 
         $response = $this->http()
             ->get(self::API_BASE_URL . "/record/{$companyId}/{$recordId}");
@@ -2141,48 +2137,282 @@ public function getService(int $companyId, int $serviceId): ?array
     }
 }
 
-public function getServices(int $companyId, int $staffId = null): ?array
+/**
+ * Получить категории услуг для изменения времени
+ */
+public function getServiceCategoriesForTimeChange(int $companyId, array $params = []): ?array
 {
     try {
-        Log::info('Getting services for company and staff', [
+        Log::info('Getting service categories for time change', [
             'company_id' => $companyId,
-            'staff_id' => $staffId
+            'params' => $params
         ]);
 
         $response = $this->http()
-            ->get(self::API_BASE_URL . "/company/{$companyId}/services", [
-                'query' => $staffId ? ['staff_id' => $staffId] : []
+            ->get(self::API_BASE_URL . "/company/{$companyId}/service_categories", $params);
+
+        $data = $this->handleResponse($response, 'getServiceCategoriesForTimeChange');
+        
+        if (!$data) {
+            Log::error('Failed to get service categories for time change', [
+                'company_id' => $companyId,
+                'response' => $response->json()
             ]);
-
-        $responseData = $response->json();
-
-        if (!isset($responseData['success']) || !$responseData['success']) {
-            Log::error('Failed to get services');
             return null;
         }
 
-        // Фильтруем услуги по staff_id
-        if ($staffId && isset($responseData['data'])) {
-            $filteredServices = array_filter($responseData['data'], function($service) use ($staffId) {
-                if (!empty($service['staff'])) {
-                    return in_array($staffId, array_column($service['staff'], 'id'));
-                }
-                return false;
-            });
-            
-            return array_values($filteredServices);
-        }
-
-        return $responseData['data'] ?? null;
+        return $data;
 
     } catch (\Exception $e) {
-        Log::error('Error getting services:', [
+        Log::error('Error getting service categories for time change:', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ]);
         return null;
     }
 }
+
+/**
+ * Get service categories for a company
+ *
+ * @param int $companyId The ID of the company
+ * @param array $params Optional parameters
+ * @return array|null Array of service categories or null on failure
+ */
+public function getServiceCategories(int $companyId, array $params = []): ?array
+{
+    try {
+        Log::info('Getting service categories', [
+            'company_id' => $companyId,
+            'params' => $params
+        ]);
+
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/service_categories", $params);
+
+        $data = $this->handleResponse($response, 'getServiceCategories');
+        
+        if (!$data) {
+            Log::error('Failed to get service categories', [
+                'company_id' => $companyId,
+                'response' => $response->json()
+            ]);
+            return null;
+        }
+
+        return $data;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting service categories:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+/**
+ * Получить данные услуги для изменения времени
+ */
+public function getServiceDetailsForTimeChange(int $companyId, int $serviceId): ?array
+{
+    try {
+        Log::info('Getting service details for time change', [
+            'company_id' => $companyId,
+            'service_id' => $serviceId
+        ]);
+
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/services/{$serviceId}");
+
+        $data = $this->handleResponse($response, 'getServiceDetailsForTimeChange');
+        
+        if (!$data) {
+            return null;
+        }
+
+        return $data;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting service details for time change:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+/**
+ * Обновить время оказания услуги мастером
+ */
+public function updateServiceTimeForMaster(int $companyId, int $serviceId, array $staffSettings): ?array
+{
+    try {
+        $response = $this->http()
+            ->post(self::API_BASE_URL . "/company/{$companyId}/services/links", [
+                'service_id' => $serviceId,
+                'master_settings' => array_map(function($setting) {
+                    $totalMinutes = $setting['seance_length'] / 60;
+                    return [
+                        'master_id' => $setting['staff_id'],
+                        'technological_card_id' => 0, // Используем 0 как значение по умолчанию
+                        'hours' => floor($totalMinutes / 60),
+                        'minutes' => $totalMinutes % 60,
+                        'price' => null
+                    ];
+                }, $staffSettings),
+                'resource_ids' => [], // Пустой массив для ресурсов
+                'translations' => [
+                    [
+                        'language_id' => 1,
+                        'translation' => ''
+                    ]
+                ]
+            ]);
+
+        return $this->handleResponse($response, 'updateServiceTimeForMaster');
+
+    } catch (\Exception $e) {
+        Log::error('Error updating service time:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'company_id' => $companyId,
+            'service_id' => $serviceId,
+            'staff_settings' => $staffSettings
+        ]);
+        throw new \Exception('Failed to update service duration: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Получить список услуг для изменения времени
+ */
+public function getServicesForTimeChange(int $companyId, array $params = []): ?array
+{
+    try {
+        Log::info('Getting services for time change', [
+            'company_id' => $companyId,
+            'params' => $params
+        ]);
+
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/services", $params);
+
+        $data = $this->handleResponse($response, 'getServicesForTimeChange');
+        
+        if (!$data) {
+            return null;
+        }
+
+        // Фильтруем по мастеру и категории
+        if (isset($params['staff_id'])) {
+            $staffId = $params['staff_id'];
+            $data = array_filter($data, function($service) use ($staffId) {
+                return !empty($service['staff']) && 
+                       in_array($staffId, array_column($service['staff'], 'id'));
+            });
+        }
+
+        if (isset($params['category_id'])) {
+            $categoryId = $params['category_id'];
+            $data = array_filter($data, function($service) use ($categoryId) {
+                return $service['category_id'] == $categoryId;
+            });
+        }
+
+        return array_values($data);
+
+    } catch (\Exception $e) {
+        Log::error('Error getting services for time change:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+public function getServicesByStaff(int $companyId, int $staffId): ?array
+{
+    try {
+        Log::info('Getting services by staff', [
+            'company_id' => $companyId,
+            'staff_id' => $staffId
+        ]);
+
+        // Формируем query-параметры: только staff_id
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/services", [
+                'query' => ['staff_id' => $staffId]
+            ]);
+
+        $responseData = $response->json();
+
+        // Проверяем поле 'success'
+        if (empty($responseData['success'])) {
+            Log::error('Failed to get services by staff', [
+                'responseData' => $responseData
+            ]);
+            return null;
+        }
+
+        // Можно дополнительно проверить, что в data действительно массив
+        return $responseData['data'] ?? null;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting services by staff:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+
+public function getServices(int $companyId, int $categoryId = null): ?array
+{
+    try {
+        Log::info('Getting services for company and category', [
+            'company_id' => $companyId,
+            'category_id' => $categoryId
+        ]);
+
+        // Если есть category_id, передаем его в query, иначе пустой массив
+        $response = $this->http()
+            ->get(self::API_BASE_URL . "/company/{$companyId}/services", [
+                'query' => $categoryId ? ['category_id' => $categoryId] : []
+            ]);
+
+        $responseData = $response->json();
+
+        // Если ответ неуспешный
+        if (!isset($responseData['success']) || !$responseData['success']) {
+            Log::error('Failed to get services');
+            return null;
+        }
+
+        // Если есть category_id, дополнительно отфильтруем услуги в PHP-коде,
+        // (на случай если в ответе почему-то пришли услуги из других категорий)
+        if ($categoryId && isset($responseData['data'])) {
+            $filteredServices = array_filter($responseData['data'], function($service) use ($categoryId) {
+                // Убедимся, что у услуги есть ключ 'category_id'
+                return isset($service['category_id']) && $service['category_id'] == $categoryId;
+            });
+            
+            return array_values($filteredServices);
+        }
+
+        // Если category_id не задан или никаких фильтраций не нужно
+        return $responseData['data'] ?? null;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting services by category:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
 
 public function getProducts(int $companyId): ?array
 {
@@ -2293,6 +2523,128 @@ public function getMasterSalary(int $companyId, int $staffId, string $dateFrom, 
         ]);
         return null;
     }
+}
+
+/**
+ * Получить цены услуг для админа
+ */
+public function getServicePrices(string $userToken, int $companyId, ?int $categoryId = null): ?array
+{
+    try {
+        $url = self::API_BASE_URL . "/company/{$companyId}/services";
+        $params = [];
+        if ($categoryId) {
+            $params['category_id'] = $categoryId;
+        }
+
+        $this->setUserToken($userToken);
+        $response = $this->http()->get($url, $params);
+
+        return $this->handleResponse($response, 'getServicePrices');
+    } catch (\Exception $e) {
+        Log::error('Error getting service prices:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return null;
+    }
+}
+
+/**
+ * Обновить цену услуги
+ */
+public function updateServicePrice(
+    string $userToken, 
+    int $companyId, 
+    int $serviceId, 
+    float $price
+): ?array {
+    try {
+        $this->setUserToken($userToken);
+
+        // Сначала получаем текущие данные услуги
+        $currentService = $this->getService($companyId, $serviceId);
+        if (!$currentService) {
+            throw new \Exception('Service not found');
+        }
+
+        // Подготавливаем данные для обновления, сохраняя все текущие параметры
+        $updateData = array_merge($currentService, [
+            'price_min' => $price,
+            'price_max' => $price
+        ]);
+
+        $response = $this->http()
+            ->patch(self::API_BASE_URL . "/company/{$companyId}/services/{$serviceId}", 
+                $updateData
+            );
+
+        $result = $this->handleResponse($response, 'updateServicePrice');
+        
+        return [
+            'success' => !empty($result),
+            'message' => empty($result) ? 'Failed to update price' : 'Price updated successfully',
+            'data' => $result
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Error updating service price:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return [
+            'success' => false,
+            'message' => 'Error updating price: ' . $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Массовое обновление цен услуг
+ */
+public function bulkUpdateServicePrices(
+    string $userToken,
+    array $updates // [[company_id, service_id, new_price], ...]
+): array {
+    $results = [
+        'success' => 0,
+        'failed' => 0,
+        'errors' => []
+    ];
+
+    $this->setUserToken($userToken);
+
+    foreach ($updates as $update) {
+        try {
+            $result = $this->updateServicePrice(
+                $userToken,
+                $update['company_id'],
+                $update['service_id'],
+                $update['new_price']
+            );
+
+            if ($result['success']) {
+                $results['success']++;
+            } else {
+                $results['failed']++;
+                $results['errors'][] = [
+                    'company_id' => $update['company_id'],
+                    'service_id' => $update['service_id'],
+                    'error' => $result['message']
+                ];
+            }
+        } catch (\Exception $e) {
+            $results['failed']++;
+            $results['errors'][] = [
+                'company_id' => $update['company_id'],
+                'service_id' => $update['service_id'],
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    return $results;
 }
 
 }

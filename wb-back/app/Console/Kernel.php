@@ -80,6 +80,46 @@ class Kernel extends ConsoleKernel
         ]);
     });
 
+    $schedule->command('app:salary-notification')
+        ->dailyAt('10:00') // Запускаем каждый день в 10:00
+        ->withoutOverlapping(5)
+        ->runInBackground()
+        ->appendOutputTo(storage_path('logs/salary-notifications.log'))
+        ->before(function () {
+            Log::info('Запуск проверки уведомлений о зарплате', [
+                'time' => now()->toDateTimeString()
+            ]);
+        })
+        ->onSuccess(function () {
+            Log::info('Проверка уведомлений о зарплате успешно завершена');
+        })
+        ->onFailure(function (Throwable $e) {
+            Log::error('Ошибка при проверке уведомлений о зарплате', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        });
+
+        $schedule->command('app:check-med-books')
+    ->dailyAt('09:00')  // Запускаем каждый день в 9 утра
+    ->withoutOverlapping(5)
+    ->runInBackground()
+    ->appendOutputTo(storage_path('logs/med-books-check.log'))
+    ->before(function () {
+        Log::info('Starting med books expiration check', [
+            'time' => now()->toDateTimeString()
+        ]);
+    })
+    ->onSuccess(function () {
+        Log::info('Med books expiration check completed successfully');
+    })
+    ->onFailure(function (Throwable $e) {
+        Log::error('Med books expiration check failed', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+    });
+
         // Очистка старых логов синхронизации
         $schedule->command('app:cleanup-sync-logs --older-than=30')
             ->weekly()
@@ -101,7 +141,7 @@ class Kernel extends ConsoleKernel
         
 
             $schedule->command('app:check-fraud')
-    ->everyThreeMinutes()
+    ->everyTenMinutes()  // Теперь каждые 10 минут
     ->withoutOverlapping(5)
     ->runInBackground()
     ->appendOutputTo(storage_path('logs/fraud-detection.log'))

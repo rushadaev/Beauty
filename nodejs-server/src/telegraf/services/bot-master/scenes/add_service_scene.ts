@@ -24,44 +24,43 @@ addServiceScene.enter(async (ctx: MyContext) => {
             );
         }
 
-        // Сохраняем состояние
+        // Сохраняем в сессии данные для дальнейших шагов
         ctx.session.addServiceState = {
             recordId: state.recordId,
             phone: state.phone || ctx.session.phone,
             password: state.password || ctx.session.password
         };
 
-        // Получаем список доступных услуг
-        const services = await laravelService.getMasterServices({
+        // 1) Запрашиваем категории, доступные мастеру
+        const categoriesResponse = await laravelService.getMasterCategoriesForTimeChange({
             phone: ctx.session.addServiceState.phone!,
             password: ctx.session.addServiceState.password!
         });
 
-        if (!services?.success || !services.data?.length) {
+        if (!categoriesResponse?.success || !categoriesResponse.data?.length) {
             return ctx.reply(
-                '❌ Нет доступных услуг для добавления',
+                '❌ Нет доступных категорий для добавления услуг',
                 Markup.inlineKeyboard([[
                     Markup.button.callback('« Назад к записи', 'back_to_record')
                 ]])
             );
         }
 
-        
-        // Создаем кнопки только с названиями услуг
-const buttons = services.data.map(service => ([
-    Markup.button.callback(
-        service.title,
-        `add_service_${service.id}`
-    )
-]));
+        // 2) Формируем кнопки для категорий
+        const buttons = categoriesResponse.data.map((cat: any) => ([
+            Markup.button.callback(
+                cat.title,
+                `select_category_${cat.id}`
+            )
+        ]));
 
-        // Добавляем кнопку отмены
+        // Кнопка отмены
         buttons.push([
             Markup.button.callback('« Отмена', 'cancel_service_add')
         ]);
 
         await ctx.reply(
-            'Выберите услугу для добавления:',
+            'Выберите категорию услуг:',
             Markup.inlineKeyboard(buttons)
         );
 
@@ -75,6 +74,78 @@ const buttons = services.data.map(service => ([
         );
     }
 });
+
+// Обработка выбора категории
+addServiceScene.action(/^select_category_(\d+)$/, async (ctx) => {
+    try {
+        const categoryId = Number(ctx.match[1]);
+        const state = ctx.session.addServiceState;
+        if (!state || !state.phone || !state.password) {
+            throw new Error('Нет данных авторизации или записи');
+        }
+
+        await ctx.answerCbQuery(); // Закрыть "часики" на кнопке
+
+        // 1) Показываем "загрузка услуг"
+        const waitMsg = await ctx.reply('⏳ Загрузка услуг...');
+
+        // 2) Запрашиваем услуги мастера в конкретной категории
+        const servicesResponse = await laravelService.getMasterServicesForTimeChange({
+            phone: state.phone,
+            password: state.password,
+            category_id: categoryId
+        });
+
+        // Удаляем сообщение "загрузка"
+        await ctx.telegram.deleteMessage(ctx.chat!.id, waitMsg.message_id).catch(() => {});
+
+        if (!servicesResponse?.success || !servicesResponse.data?.length) {
+            await ctx.reply(
+                '❌ Нет доступных услуг в этой категории',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('« Выбрать другую категорию', 'back_to_categories')],
+                    [Markup.button.callback('« Отмена', 'cancel_service_add')]
+                ])
+            );
+            return;
+        }
+
+        // 3) Формируем кнопки услуг
+        const buttons = servicesResponse.data.map((service: any) => ([
+            Markup.button.callback(
+                service.title,
+                `add_service_${service.id}`
+            )
+        ]));
+
+        // Добавляем кнопки "назад к категориям" и "отмена"
+        buttons.push([
+            Markup.button.callback('« Выбрать другую категорию', 'back_to_categories'),
+            Markup.button.callback('« Отмена', 'cancel_service_add')
+        ]);
+
+        await ctx.reply(
+            'Выберите услугу для добавления:',
+            Markup.inlineKeyboard(buttons)
+        );
+
+    } catch (error) {
+        console.error('Error in select_category:', error);
+        await ctx.reply(
+            '❌ Произошла ошибка при загрузке услуг. Попробуйте позже.',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('« Назад', 'cancel_service_add')]
+            ])
+        );
+    }
+});
+
+// Кнопка вернуться к категориям (просто перезаходим в сцену)
+addServiceScene.action('back_to_categories', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.reenter(); // Заново вызовется enter, покажет категории
+});
+
 
 // Обработка выбора услуги
 addServiceScene.action(/^add_service_(\d+)$/, async (ctx) => {

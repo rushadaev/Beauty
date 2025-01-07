@@ -26,9 +26,13 @@ mainScene.enter(async (ctx: MyContext) => {
             Markup.button.callback('изменить график работы', 'change_schedule'),
         ],
         [
-            Markup.button.callback('🚪 Выйти из аккаунта', 'logout')  // Добавляем кнопку выхода
+            Markup.button.callback('изменить время услуги', 'change_service_time') // Добавляем новую кнопку
+        ],
+        [
+            Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
+
 
     if (ctx.callbackQuery?.message) {
         try {
@@ -133,11 +137,19 @@ mainScene.action('mainmenu', async (ctx) => {
             Markup.button.callback('изменить график работы', 'change_schedule'),
         ],
         [
-            Markup.button.callback('🚪 Выйти из аккаунта', 'logout')  // Добавляем кнопку выхода
+            Markup.button.callback('изменить время услуги', 'change_service_time') // Добавляем новую кнопку
+        ],
+        [
+            Markup.button.callback('🚪 Выйти из аккаунта', 'logout')
         ]
     ]);
 
     await ctx.editMessageText(messageText, mainMenuKeyboard);
+});
+
+mainScene.action('change_service_time', async (ctx) => {
+    await ctx.answerCbQuery();
+    return ctx.scene.enter('change_service_time_scene');
 });
 
 // Остальные обработчики остаются без изменений

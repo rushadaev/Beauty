@@ -18,6 +18,7 @@ import { cancelBookingScene } from '../services/bot-master/scenes/cancel_booking
 import { changePhoneScene } from '../services/bot-master/scenes/change_phone_scene';
 import { deleteServiceScene } from '../services/bot-master/scenes/delete_service_scene';
 import { addServiceScene } from '../services/bot-master/scenes/add_service_scene';
+import { changeServiceTimeScene } from '../services/bot-master/scenes/change_service_time_scene';
 
 
 const botToken: string = process.env.TELEGRAM_BOT_TOKEN_MASTER!;
@@ -41,6 +42,7 @@ const stage = new Scenes.Stage<MyContext>([
     changePhoneScene,
     deleteServiceScene,
     addServiceScene,
+    changeServiceTimeScene,
 ]);
 
 // Middleware to log incoming updates
@@ -54,9 +56,7 @@ botMaster.use(async (ctx: MyContext, next: () => Promise<void>) => {
 // Handle /start command
 botMaster.start(async (ctx: MyContext) => {
     // Очищаем сессию при старте
-    if (ctx.session) {
-        ctx.session = {}; // Сбрасываем сессию
-    }
+
     
     const startPayload = ctx.payload;
 

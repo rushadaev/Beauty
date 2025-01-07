@@ -103,6 +103,8 @@ services:
       php /var/www/wb-back/artisan horizon"
     restart: always
 
+    
+
   nodejs-server:
     build:
       context: ./nodejs-server
@@ -135,6 +137,20 @@ services:
     command: >
       sh -c "
       npm run dev"
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok-beauty
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "--log=stdout"
+      - "--log-format=json"
+      - "--url=albacore-famous-opossum.ngrok-free.app"
+      - "3000"
 
 
 #  auth-worker:

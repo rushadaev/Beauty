@@ -256,10 +256,26 @@ export interface CreateNotificationResponse {
     data?: any;
 }
 
+export interface RecordData {
+    id: string;
+    date: string;
+    client?: {
+        name?: string;
+        phone?: string;
+    };
+    services?: Array<{
+        id: number;
+        title: string;
+        cost: number;
+    }>;
+}
+
 /**
  * Base Wizard Session Interface
  */
 export interface MyWizardSession extends Scenes.WizardSessionData {
+    currentPage: number;
+    recordsByDate: Record<string, RecordData[]>;
     tasksState: TasksState;
     __scenes: any;
     warehouseForm: any;
@@ -325,7 +341,14 @@ export interface AutoBookingForm {
     monopalletCount?: number;
 }
 
-
+export interface PriceChangeDisplay {
+    branch_name: string;
+    service_name: string;
+    old_price: number;
+    new_price: number;
+    branch_id: number;  // Добавляем ID для API
+    service_id: number; // Добавляем ID для API
+}
 
 export type MySessionData = MyWizardSession;
 
@@ -333,6 +356,10 @@ export type MySessionData = MyWizardSession;
  * Global Session Interface accommodating all Scene Sessions
  */
 export interface MySession extends Scenes.WizardSession<MySessionData> {
+    pendingChanges?: PriceChangeDisplay[]; 
+    awaitingServiceDuration: any;
+    selectedCategoryId: any;
+    selectedServiceId: string;
     tasksState: TasksState;
     selectedNotificationId: number; // Меняем тип с string на number
     editField?: 'name' | 'sum' | 'date';
@@ -492,6 +519,13 @@ export interface UploadedDocument {
 export interface DocumentUploadSession {
     documents: UploadedDocument[];
     registrationId: number;
+}
+
+export interface PriceChange {
+    branch_name: string;
+    service_name: string;
+    old_price: number;
+    new_price: number;
 }
 
 type SearchRequestsContext = Scenes.SceneContext<SearchRequestsSession>;

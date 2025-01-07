@@ -29,6 +29,8 @@ import { notificationsCreateScene } from '../services/bot-admin/scenes/notificat
 import { remindLaterScene } from '../services/bot-admin/scenes/remindLaterScene';
 import { notificationsListScene } from '../services/bot-admin/scenes/notificationsListScene';
 import { tasksScene } from  '../services/bot-admin/scenes/tasksScene';
+import { changeServicesScene } from  '../services/bot-admin/scenes/changeServicesScene';
+import { pinboxScene } from  '../services/bot-admin/scenes/pinboxScene';
 
 
 interface BaseState {
@@ -64,6 +66,8 @@ const stage = new Scenes.Stage<MyContext>([
     remindLaterScene,
     notificationsListScene,
     tasksScene,
+    changeServicesScene,
+    pinboxScene,
 ]);
 
 // Middleware
